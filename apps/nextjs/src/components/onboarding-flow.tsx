@@ -380,8 +380,8 @@ function Welcome({ onStart }: { onStart: () => void }) {
 				Let&rsquo;s set up your profile
 			</h1>
 			<p className="mt-3 max-w-xl text-pretty text-muted-foreground text-sm leading-relaxed">
-				Four short screens, about a minute. Skip anything you would rather not
-				answer — we will tell you what we could not work out without it.
+				Skip anything you would rather not answer. We will tell you what we
+				could not work out without it.
 			</p>
 
 			<ul className="mt-8 grid max-w-xl gap-3">

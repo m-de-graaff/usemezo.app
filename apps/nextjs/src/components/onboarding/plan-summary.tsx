@@ -108,8 +108,8 @@ function Complete({
 			</h1>
 			<p className="mt-3 max-w-xl text-pretty text-muted-foreground text-sm leading-relaxed">
 				Worked out from your answers with the Mifflin-St Jeor equation. It is an
-				estimate and a starting point to adjust from, not medical advice — and
-				it is not a substitute for talking to a doctor.
+				estimate to adjust from, not medical advice, and no substitute for
+				talking to a doctor.
 			</p>
 
 			<div className="mt-8 grid gap-3">
@@ -143,7 +143,7 @@ function Complete({
 						role={plan.atFloor ? "status" : undefined}
 					>
 						{plan.atFloor
-							? "Raised to a safe minimum — the deficit your goal implied was lower than anyone should eat for long."
+							? "Raised to a safe minimum. The deficit your goal implied was lower than anyone should eat for long."
 							: "Change it if you already know your number. Editable later in Settings."}
 					</p>
 					{!valid && (
@@ -246,7 +246,7 @@ function Incomplete({
 			<p className="mt-3 max-w-xl text-pretty text-muted-foreground text-sm leading-relaxed">
 				Mezo works out your calorie and macro targets from {listOf(missing)}.
 				Rather than guess at {missing.length === 1 ? "it" : "them"} and hand you
-				a number that is wrong, it is leaving the targets unset — add{" "}
+				a number that is wrong, it is leaving the targets unset. Add{" "}
 				{missing.length === 1 ? "the answer" : "them"} whenever you like and
 				they appear on your dashboard.
 			</p>
