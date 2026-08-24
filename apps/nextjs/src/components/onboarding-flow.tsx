@@ -464,20 +464,11 @@ function BrandPanel({ index }: { index: number }) {
 				className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-foreground via-foreground/85 to-transparent"
 			/>
 
-			{/* Two faint rings over it, as texture rather than decoration to look at. */}
-			<div aria-hidden="true" className="pointer-events-none absolute inset-0">
-				<span className="absolute -top-24 -right-28 size-72 rounded-full border border-background/10" />
-				<span className="absolute -top-8 -right-16 size-52 rounded-full border border-background/10" />
-			</div>
-
-			<div className="relative flex items-center justify-between gap-4">
-				<span className="flex items-center gap-2.5">
-					<span className="flex size-8 items-center justify-center rounded-lg bg-background text-foreground">
-						<LogoMark className="size-4" />
-					</span>
-					<span className="font-semibold tracking-tight">mezo</span>
+			<div className="relative flex items-center gap-2.5">
+				<span className="flex size-8 items-center justify-center rounded-lg bg-background text-foreground">
+					<LogoMark className="size-4" />
 				</span>
-				<span className={cn(MICRO, "text-background/50")}>First run</span>
+				<span className="font-semibold tracking-tight">mezo</span>
 			</div>
 
 			<div className="relative mt-auto">
