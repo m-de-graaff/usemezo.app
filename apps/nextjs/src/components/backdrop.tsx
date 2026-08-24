@@ -1,6 +1,7 @@
 "use client";
 
 import { useIsMobile } from "@mezo/ui/hooks/use-mobile";
+import { cn } from "@mezo/ui/lib/utils";
 import { useTheme } from "@mezo/ui/theme";
 import { useEffect, useState } from "react";
 import PixelBlast from "./pixel-blast";
@@ -22,7 +23,23 @@ import PixelBlast from "./pixel-blast";
  */
 const INK_SECONDARY = { light: "#666669", dark: "#A0A0A8" } as const;
 
-export function Backdrop() {
+export function Backdrop({
+	className,
+	inverted = false,
+}: {
+	/**
+	 * Replaces the default full-viewport positioning. Pass `absolute inset-0`
+	 * to sit inside a `relative` parent instead — onboarding's brand panel does,
+	 * so the field is clipped to the panel rather than running under the form.
+	 */
+	className?: string;
+	/**
+	 * For a surface painted `bg-foreground`, where the page's own ink would be
+	 * the low-contrast choice: this takes the other theme's value, so the field
+	 * reads against the inverted panel the way it does against the page.
+	 */
+	inverted?: boolean;
+}) {
 	const { resolvedTheme } = useTheme();
 	const isMobile = useIsMobile();
 	const [animate, setAnimate] = useState(false);
@@ -37,12 +54,18 @@ export function Backdrop() {
 
 	if (!animate || isMobile || !resolvedTheme) return null;
 
+	const light = resolvedTheme === "light";
+	const ink = (light ? !inverted : inverted)
+		? INK_SECONDARY.light
+		: INK_SECONDARY.dark;
+
 	return (
-		<div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10">
+		<div
+			aria-hidden="true"
+			className={cn("pointer-events-none", className ?? "fixed inset-0 -z-10")}
+		>
 			<PixelBlast
-				color={
-					resolvedTheme === "light" ? INK_SECONDARY.light : INK_SECONDARY.dark
-				}
+				color={ink}
 				edgeFade={0.43}
 				enableRipples={false}
 				patternDensity={0.7}

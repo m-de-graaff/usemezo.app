@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Backdrop } from "~/components/backdrop";
 import { LogoMark } from "~/components/logo";
 import { PlanSummary } from "~/components/onboarding/plan-summary";
 import { QuestionField } from "~/components/onboarding/question-control";
@@ -33,6 +34,18 @@ import { api } from "~/trpc/react";
 /** The small tracked capitals used for every label that is not a heading. */
 const MICRO =
 	"font-medium text-[0.6875rem] uppercase leading-none tracking-[0.16em]";
+
+/**
+ * The bar every screen's primary action sits in. Sticky at the foot of the
+ * scrolling column, with negative margins cancelling that column's padding so
+ * the top rule spans it fully.
+ *
+ * `plan-summary.tsx` repeats this string rather than importing it: the import
+ * runs the other way, and one shared className is not worth a module to hold
+ * it. Change one, change both.
+ */
+const ACTION_BAR =
+	"sticky bottom-0 z-10 -mx-5 mt-auto border-border/60 border-t bg-background px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12";
 
 /** Before the first question. */
 const WELCOME = -1;
@@ -190,39 +203,48 @@ export function OnboardingFlow({
 	};
 
 	return (
-		// A muted mat with one inset slab on it — the same frame the landing page
-		// uses, which is the register this belongs to: a standalone first-run
-		// page rather than a screen inside the app shell.
-		<div className="flex min-h-svh flex-col bg-muted/60 p-3 sm:p-5">
-			<div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-2 py-3 sm:px-4">
-				<p
-					className={cn(MICRO, "flex items-center gap-2 text-muted-foreground")}
-				>
-					mezo
-					<span
-						aria-hidden="true"
-						className="size-1 rounded-full bg-muted-foreground/50"
-					/>
-					Set up your profile
-				</p>
-				{screen && (
-					<p
-						className={cn(
-							MICRO,
-							"text-muted-foreground tabular-nums sm:hidden",
+		// Full bleed: the whole viewport, no mat and no inset slab. First run owns
+		// the screen, so the only frame is the edge of it.
+		//
+		// `h-svh` with `overflow-hidden` rather than `min-h-svh`, because the two
+		// columns scroll independently below — the panel stays put while the
+		// questions move, which is what stops a long list dragging the brand off
+		// the top of the page.
+		<div className="grid h-svh overflow-hidden bg-background lg:grid-cols-[minmax(20rem,26%)_minmax(0,1fr)]">
+			<BrandPanel index={index} />
+
+			<div className="flex min-h-0 flex-col overflow-y-auto">
+				{/* One padded column, capped and centred: full width is right for
+				    the chrome, and wrong for a line of text — on a wide monitor an
+				    uncapped question column strands the answer far from the label. */}
+				<div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-5 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-10">
+					<div className="flex items-center justify-between gap-4 lg:hidden">
+						<p
+							className={cn(
+								MICRO,
+								"flex items-center gap-2 text-muted-foreground",
+							)}
+						>
+							mezo
+							<span
+								aria-hidden="true"
+								className="size-1 rounded-full bg-muted-foreground/50"
+							/>
+							Set up your profile
+						</p>
+						{screen && (
+							<p className={cn(MICRO, "text-muted-foreground tabular-nums")}>
+								{pad(index + 1)} <span aria-hidden="true">/</span>{" "}
+								{pad(ONBOARDING_SCREENS.length)}
+							</p>
 						)}
-					>
-						{pad(index + 1)} <span aria-hidden="true">/</span>{" "}
-						{pad(ONBOARDING_SCREENS.length)}
-					</p>
-				)}
-			</div>
+					</div>
 
-			<div className="mx-auto grid w-full max-w-6xl flex-1 rounded-3xl bg-background shadow-sm lg:min-h-[40rem] lg:grid-cols-[21rem_minmax(0,1fr)]">
-				<BrandPanel index={index} />
-
-				<div className="flex flex-col p-5 sm:p-8 lg:p-10">
-					{screen && <StepBar current={index} />}
+					{screen && (
+						<div className="mt-6 lg:mt-0">
+							<StepBar current={index} />
+						</div>
+					)}
 
 					{/* Keyed so the screen remounts: entrance motion replays and the
 					    controls re-seed, while the panel and stepper stay put and
@@ -267,11 +289,11 @@ export function OnboardingFlow({
 									))}
 								</div>
 
-								{/* Pinned to the bottom of the pane on a wide screen, so
-								    Continue sits in the same place on every screen. On a
-								    phone it sticks to the viewport instead, so a long list
-								    cannot push it out of reach. */}
-								<div className="sticky bottom-0 z-10 -mx-5 mt-auto flex items-center gap-3 border-border/60 border-t bg-background px-5 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:mt-10 sm:px-0 sm:pb-0">
+								{/* Pinned at every width now that the column scrolls inside
+								    itself: a long list of options must never be able to push
+								    Continue out of reach. The negative margins cancel the
+								    column's padding so the rule runs edge to edge. */}
+								<div className={cn(ACTION_BAR, "flex items-center gap-3")}>
 									<Button
 										className="h-11 rounded-full px-4"
 										disabled={pending}
@@ -317,24 +339,6 @@ export function OnboardingFlow({
 						)}
 					</div>
 				</div>
-			</div>
-
-			<div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-2 py-3 sm:px-4">
-				<p className={cn(MICRO, "text-muted-foreground")}>
-					Mezo — training, food and sleep in one place
-				</p>
-				<p
-					className={cn(
-						MICRO,
-						"flex items-center gap-2 text-muted-foreground max-sm:hidden",
-					)}
-				>
-					<span
-						aria-hidden="true"
-						className="size-1 rounded-full bg-muted-foreground/50"
-					/>
-					Health answers stay private
-				</p>
 			</div>
 		</div>
 	);
@@ -401,7 +405,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
 				))}
 			</ul>
 
-			<div className="sticky bottom-0 z-10 -mx-5 mt-auto border-border/60 border-t bg-background px-5 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:mt-10 sm:border-t-0 sm:px-0 sm:pb-0">
+			<div className={ACTION_BAR}>
 				<Button
 					className="h-11 w-full rounded-full px-6 sm:w-auto"
 					onClick={onStart}
@@ -444,8 +448,23 @@ function BrandPanel({ index }: { index: number }) {
 					};
 
 	return (
-		<aside className="relative hidden overflow-hidden rounded-l-3xl bg-foreground p-10 text-background lg:flex lg:flex-col">
-			{/* Two faint rings, as texture rather than decoration to look at. */}
+		<aside className="relative hidden overflow-hidden bg-foreground p-10 text-background lg:flex lg:flex-col xl:p-12">
+			{/* The same dither field as the auth pages, so signing up and setting up
+			    read as one flow — but clipped to this panel rather than running the
+			    width of the page, which would put ambient motion under the
+			    questions. `overflow-hidden` above is what does the clipping. */}
+			<Backdrop className="absolute inset-0" inverted />
+
+			{/* The field runs behind the copy at the foot of the panel and takes
+			    its contrast down with it. This fades it back into the panel colour
+			    over the bottom half, so the text keeps its full ratio and the
+			    texture survives everywhere it is not competing with words. */}
+			<div
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-foreground via-foreground/85 to-transparent"
+			/>
+
+			{/* Two faint rings over it, as texture rather than decoration to look at. */}
 			<div aria-hidden="true" className="pointer-events-none absolute inset-0">
 				<span className="absolute -top-24 -right-28 size-72 rounded-full border border-background/10" />
 				<span className="absolute -top-8 -right-16 size-52 rounded-full border border-background/10" />

@@ -290,7 +290,9 @@ function Finish({
 	onFinish: () => void;
 }) {
 	return (
-		<div className="sticky bottom-0 z-10 -mx-5 mt-auto border-border/60 border-t bg-background px-5 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:mt-10 sm:border-t-0 sm:px-0 sm:pb-0">
+		// Kept in step with `ACTION_BAR` in `onboarding-flow.tsx`, which explains
+		// why the string lives in two places.
+		<div className="sticky bottom-0 z-10 -mx-5 mt-auto border-border/60 border-t bg-background px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12">
 			<Button
 				className="h-11 w-full rounded-full px-6 sm:w-auto"
 				disabled={pending || disabled}
