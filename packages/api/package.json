@@ -5,15 +5,18 @@
 	"type": "module",
 	"exports": {
 		".": "./src/root.ts",
+		"./profile-fields": "./src/profile-fields.ts",
 		"./trpc": "./src/trpc.ts"
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "node --test \"src/**/*.test.ts\""
 	},
 	"dependencies": {
 		"@mezo/auth": "workspace:*",
 		"@mezo/db": "workspace:*",
 		"@trpc/server": "^11.18.0",
+		"drizzle-orm": "^0.45.2",
 		"superjson": "^2.2.6",
 		"zod": "^4.4.3"
 	},
