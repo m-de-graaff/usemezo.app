@@ -1,0 +1,24 @@
+{
+	"name": "@mezo/api",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/root.ts",
+		"./trpc": "./src/trpc.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@trpc/server": "^11.0.0",
+		"superjson": "^2.2.1",
+		"zod": "^3.24.2",
+		"@mezo/auth": "workspace:*",
+		"@mezo/db": "workspace:*"
+	},
+	"devDependencies": {
+		"typescript": "^5.8.2",
+		"@types/node": "^20.14.10"
+	}
+}

@@ -1,0 +1,27 @@
+{
+	"name": "usemezo",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"packageManager": "pnpm@11.10.0",
+	"scripts": {
+		"build": "turbo run build",
+		"dev": "turbo run dev",
+		"start": "turbo run start",
+		"typecheck": "turbo run typecheck",
+		"test": "turbo run test",
+		"check": "biome check .",
+		"check:write": "biome check --write .",
+		"check:unsafe": "biome check --write --unsafe .",
+		"db:generate": "pnpm -F @mezo/db generate",
+		"db:migrate": "pnpm -F @mezo/db migrate",
+		"db:push": "pnpm -F @mezo/db push",
+		"db:studio": "pnpm -F @mezo/db studio"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.2.5",
+		"turbo": "^2.5.4",
+		"typescript": "^5.8.2",
+		"@types/node": "^20.14.10"
+	}
+}

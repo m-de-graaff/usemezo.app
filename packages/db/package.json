@@ -1,0 +1,27 @@
+{
+	"name": "@mezo/db",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./schema": "./src/schema.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"generate": "drizzle-kit generate",
+		"migrate": "drizzle-kit migrate",
+		"push": "drizzle-kit push",
+		"studio": "drizzle-kit studio"
+	},
+	"dependencies": {
+		"drizzle-orm": "^0.41.0",
+		"postgres": "^3.4.4",
+		"@mezo/env": "workspace:*"
+	},
+	"devDependencies": {
+		"drizzle-kit": "^0.30.5",
+		"typescript": "^5.8.2",
+		"@types/node": "^20.14.10"
+	}
+}
