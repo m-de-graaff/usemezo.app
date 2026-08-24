@@ -585,7 +585,9 @@ function DateInput({
 			</legend>
 			{help}
 
-			<div className="mt-2 flex w-full max-w-sm flex-col gap-3 self-center">
+			{/* `mx-auto`, not `self-center`: the parent is the `<fieldset>`, which is
+			    a block, so an alignment property would have nothing to align to. */}
+			<div className="mx-auto mt-2 flex w-full max-w-sm flex-col gap-3">
 				<div className="relative">
 					{/* One pill across all three wheels, marking the row they read
 					    from. Behind the numbers and untouchable, so a drag that
