@@ -7,7 +7,7 @@ import { type NextRequest, NextResponse } from "next/server";
  * redirect optimisation; every protected page/procedure still calls
  * `getSession()` and is the real authority.
  */
-const PROTECTED_PREFIXES = ["/dashboard"];
+const PROTECTED_PREFIXES = ["/dashboard", "/settings", "/onboarding"];
 // `/reset-password` stays reachable while signed in: the token in the link is
 // the authority there, not the session.
 const AUTH_PAGES = ["/sign-in", "/sign-up", "/forgot-password"];
