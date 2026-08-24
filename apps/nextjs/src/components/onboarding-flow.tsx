@@ -350,21 +350,23 @@ export function OnboardingFlow({
  * for it — before they have committed to a single answer.
  */
 function Welcome({ onStart }: { onStart: () => void }) {
+	// Named after what the plan screen actually puts on the page, so the promise
+	// here and the payoff there are the same three things in the same order.
 	const gets = [
 		{
 			icon: UtensilsIcon,
-			title: "A calorie and macro target",
-			body: "Worked out from your body and your week, not copied off a chart.",
-		},
-		{
-			icon: ScaleIcon,
-			title: "A pace towards your goal",
-			body: "What a week of it looks like, and roughly how long it runs for.",
+			title: "A daily calorie target",
+			body: "Based on your height, weight, age and how active you are.",
 		},
 		{
 			icon: SparklesIcon,
-			title: "Numbers that mean something",
-			body: "Every range Mezo shows you is adjusted for your age and build.",
+			title: "Protein, carbs and fat",
+			body: "How to split those calories across the day.",
+		},
+		{
+			icon: ScaleIcon,
+			title: "A realistic timeline",
+			body: "What to expect each week, and when you would reach your goal.",
 		},
 	];
 
@@ -375,12 +377,11 @@ function Welcome({ onStart }: { onStart: () => void }) {
 				className="mt-4 text-balance font-semibold text-3xl leading-[1.05] tracking-[-0.03em] outline-none sm:text-4xl"
 				tabIndex={-1}
 			>
-				Four screens, about a minute
+				Let&rsquo;s set up your profile
 			</h1>
 			<p className="mt-3 max-w-xl text-pretty text-muted-foreground text-sm leading-relaxed">
-				Mezo asks for the handful of things it cannot work without, then shows
-				you what they add up to. Skip anything you would rather not answer — it
-				will tell you what that leaves out rather than guessing.
+				Four short screens, about a minute. Skip anything you would rather not
+				answer — we will tell you what we could not work out without it.
 			</p>
 
 			<ul className="mt-8 grid max-w-xl gap-3">
