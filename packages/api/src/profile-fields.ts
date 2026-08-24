@@ -478,9 +478,10 @@ export const SECTIONS: readonly Section[] = [
 			{
 				type: "select",
 				name: "eatingHabits",
-				label: "Eating habits",
+				label: "How you eat",
 				question: "How do you eat?",
 				options: EATING_HABITS,
+				help: "What your meal plans get built around. It does not change your calorie target.",
 			},
 			{
 				type: "number",
@@ -573,7 +574,7 @@ const ONBOARDING_PLAN = [
 			"Training, food and sleep all get pulled towards whatever you pick here. Change it whenever it changes.",
 		aside:
 			"Pick as many as you like. Mezo weighs them against each other rather than making you commit to one.",
-		fields: ["goals", "goalDirection"],
+		fields: ["goals", "goalDirection", "eatingHabits"],
 	},
 	{
 		title: "Body",

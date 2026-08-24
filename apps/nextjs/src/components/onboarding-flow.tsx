@@ -13,9 +13,10 @@ import {
 	ArrowLeftIcon,
 	ArrowRightIcon,
 	CheckIcon,
+	FlameIcon,
+	SaladIcon,
 	ScaleIcon,
 	SparklesIcon,
-	UtensilsIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -350,13 +351,15 @@ export function OnboardingFlow({
  * for it — before they have committed to a single answer.
  */
 function Welcome({ onStart }: { onStart: () => void }) {
-	// Named after what the plan screen actually puts on the page, so the promise
-	// here and the payoff there are the same three things in the same order.
+	// The first three are what the plan screen puts on the page at the end of
+	// this flow, in the order it puts them. The fourth is not built yet and says
+	// so: it is the reason the flow asks how you eat, and leaving it unsaid
+	// makes that question look like idle curiosity.
 	const gets = [
 		{
-			icon: UtensilsIcon,
+			icon: FlameIcon,
 			title: "A daily calorie target",
-			body: "Based on your height, weight, age and how active you are.",
+			body: "From your height, weight, date of birth, gender and how active you are.",
 		},
 		{
 			icon: SparklesIcon,
@@ -367,6 +370,11 @@ function Welcome({ onStart }: { onStart: () => void }) {
 			icon: ScaleIcon,
 			title: "A realistic timeline",
 			body: "What to expect each week, and when you would reach your goal.",
+		},
+		{
+			icon: SaladIcon,
+			title: "Meal plans that fit how you eat",
+			body: "High protein, low carb, vegetarian, and so on. Coming soon.",
 		},
 	];
 
