@@ -91,7 +91,14 @@ export function SettingsForm({
 	const availability = useUsernameAvailability(values.username);
 	const system = unitSystem(values.units);
 
-	const dirty = section.fields.some(
+	// The fields this section's own answers say still apply. Onboarding filters
+	// the same way; both have to, or Settings writes a target weight for someone
+	// who told it they are not aiming at one.
+	const asked = section.fields.filter(
+		(field) => !field.when || field.when(values),
+	);
+
+	const dirty = asked.some(
 		(field) => !sameAnswer(values[field.name], saved[field.name]),
 	);
 
@@ -107,7 +114,7 @@ export function SettingsForm({
 		// and an emptied field is `null`, which clears it.
 		// A toggle is false when off, never null — the column is NOT NULL.
 		const payload = Object.fromEntries(
-			section.fields.map((field) => [
+			asked.map((field) => [
 				field.name,
 				values[field.name] ?? (field.type === "toggle" ? false : null),
 			]),
@@ -123,7 +130,7 @@ export function SettingsForm({
 					<CardDescription>{section.description}</CardDescription>
 				</CardHeader>
 				<CardContent className="flex flex-col">
-					{section.fields.map((field) => (
+					{asked.map((field) => (
 						<FieldRow
 							field={field}
 							key={field.name}

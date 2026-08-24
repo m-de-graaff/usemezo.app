@@ -1,7 +1,6 @@
 import { getSession } from "@mezo/auth/server";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Backdrop } from "~/components/backdrop";
 import { OnboardingFlow } from "~/components/onboarding-flow";
 import { api } from "~/trpc/server";
 
@@ -19,12 +18,8 @@ export default async function OnboardingPage() {
 	// Already done — there is nothing here to come back to.
 	if (profile.onboardedAt) redirect("/dashboard");
 
-	// Same dither field as the auth pages, so signing up and setting up read as
-	// one flow rather than two products.
-	return (
-		<>
-			<Backdrop />
-			<OnboardingFlow values={profile} />
-		</>
-	);
+	// No dither field behind this one, unlike the auth pages: onboarding is a
+	// column of questions to work through, and ambient motion under it reads as
+	// decoration competing with the thing being asked.
+	return <OnboardingFlow values={profile} />;
 }

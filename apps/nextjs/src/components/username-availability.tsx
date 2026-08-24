@@ -44,9 +44,12 @@ export type UsernameAvailability = ReturnType<typeof useUsernameAvailability>;
 export function UsernameStatus({
 	availability,
 	className,
+	id,
 }: {
 	availability: UsernameAvailability;
 	className?: string;
+	/** So the field it belongs to can point `aria-describedby` at it. */
+	id?: string;
 }) {
 	const { value, parsed, taken, free, loading } = availability;
 
@@ -68,6 +71,7 @@ export function UsernameStatus({
 		<p
 			aria-live="polite"
 			className={`${parsed.success && !taken ? "text-muted-foreground" : "text-destructive"} ${className ?? ""}`}
+			id={id}
 		>
 			{message}
 		</p>

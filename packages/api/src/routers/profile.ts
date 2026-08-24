@@ -92,19 +92,34 @@ export const profileRouter = createTRPCRouter({
 			return { available: !taken || taken.userId === ctx.session.user.id };
 		}),
 
-	/** Marks the questionnaire as done so the app stops redirecting to it. */
-	completeOnboarding: protectedProcedure.mutation(async ({ ctx }) => {
-		const userId = ctx.session.user.id;
-		const onboardedAt = new Date();
+	/**
+	 * Marks the questionnaire as done so the app stops redirecting to it, and
+	 * stores the calorie target the user approved on the way out.
+	 *
+	 * The target rides along rather than going through `update` first, so the
+	 * last screen is one round trip: two mutations racing to upsert the same row
+	 * is a worse trade than one procedure taking an extra optional field.
+	 */
+	completeOnboarding: protectedProcedure
+		.input(profileInput.pick({ dailyCalories: true }))
+		.mutation(async ({ ctx, input }) => {
+			const userId = ctx.session.user.id;
+			const onboardedAt = new Date();
 
-		await ctx.db
-			.insert(userProfile)
-			.values({ userId, onboardedAt })
-			.onConflictDoUpdate({
-				target: userProfile.userId,
-				set: { onboardedAt, updatedAt: new Date() },
-			});
-	}),
+			await ctx.db
+				.insert(userProfile)
+				.values({ userId, onboardedAt, dailyCalories: input.dailyCalories })
+				.onConflictDoUpdate({
+					target: userProfile.userId,
+					set: {
+						onboardedAt,
+						// `undefined` is dropped by Drizzle, so an unset target leaves
+						// whatever is already there alone.
+						dailyCalories: input.dailyCalories ?? undefined,
+						updatedAt: new Date(),
+					},
+				});
+		}),
 
 	/**
 	 * The public profile, by handle. Public on purpose, so the response is built

@@ -10,6 +10,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
+	/* Stronger than the built-in `ease-out`, which is too weak to read as
+	   deliberate motion. Entrances and exits. */
+	--ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
 	--font-sans:
 		var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
 		"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";

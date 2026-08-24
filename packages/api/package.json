@@ -5,6 +5,7 @@
 	"type": "module",
 	"exports": {
 		".": "./src/root.ts",
+		"./plan": "./src/plan.ts",
 		"./profile-fields": "./src/profile-fields.ts",
 		"./trpc": "./src/trpc.ts"
 	},

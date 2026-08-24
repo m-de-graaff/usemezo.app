@@ -2,20 +2,19 @@
 
 import type { Field, ProfileInput } from "@mezo/api/profile-fields";
 import { Input } from "@mezo/ui/input";
+import { Label } from "@mezo/ui/label";
 import { cn } from "@mezo/ui/lib/utils";
 import { CheckIcon } from "lucide-react";
 import { useId } from "react";
-import type { Answer } from "~/components/settings/settings-form";
+import type {
+	Answer,
+	SettingsValues,
+} from "~/components/settings/settings-form";
 import {
 	type UsernameAvailability,
 	UsernameStatus,
 } from "~/components/username-availability";
-import {
-	defaultFor,
-	displayMeasure,
-	type UnitSystem,
-	unitLabel,
-} from "~/lib/measure";
+import { defaultFor, displayMeasure, type UnitSystem } from "~/lib/measure";
 
 type Props = {
 	field: Field;
@@ -23,14 +22,111 @@ type Props = {
 	onChange: (name: keyof ProfileInput, value: Answer) => void;
 	system: UnitSystem;
 	availability: UsernameAvailability;
+	/** Every answer so far, for the questions whose text depends on another. */
+	context: SettingsValues;
+};
+
+type Wiring = {
+	/** The control's `id`, so a sibling `<label for>` names it. */
+	id?: string;
+	describedBy?: string;
 };
 
 /**
- * One question, filling the screen. Settings renders the same fields compactly
- * in `SettingsForm`; this is the first-run version, where a single large target
- * per screen beats a dense form.
+ * Shared by every option a finger or a cursor lands on. Press feedback is
+ * `motion-safe` only, since a shrinking row is movement rather than the colour
+ * change that carries the meaning.
  */
-export function QuestionControl(props: Props) {
+const OPTION = cn(
+	"cursor-pointer select-none transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out",
+	"has-focus-visible:ring-3 has-focus-visible:ring-ring/50 motion-safe:active:scale-[0.98]",
+	"hover:border-foreground/25 hover:bg-muted/40",
+	"has-checked:border-foreground has-checked:shadow-sm has-checked:ring-1 has-checked:ring-foreground",
+);
+
+/**
+ * One roomy row per choice, for options that carry an explanation. Selected is
+ * a heavier border plus a filled marker rather than a wash of colour, so a
+ * multiselect with five answers still reads as a list instead of a block.
+ */
+const OPTION_ROW = cn(
+	OPTION,
+	"relative flex min-h-14 items-center gap-3.5 rounded-xl border border-border bg-background px-3.5 py-3 text-left",
+);
+
+/** The same choice, for options short enough to sit side by side. */
+const OPTION_CHIP = cn(
+	OPTION,
+	"relative flex min-h-11 items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-left",
+);
+
+/**
+ * Options this short read as a row of chips; anything longer needs a line of
+ * its own. A threshold rather than a flag on each field, so adding an option
+ * cannot leave the layout it implies out of date.
+ */
+const CHIP_LIMIT = 24;
+
+/** Which controls name themselves with a `<legend>` rather than a `<label>`. */
+const GROUPED = new Set<Field["type"]>(["select", "multiselect", "toggle"]);
+
+/**
+ * One question on a screen that asks several: its own label, its own help text,
+ * and its own control, wired together so the name a screen reader reads is the
+ * one on the page.
+ *
+ * Renders nothing when the field does not apply — asking someone who is
+ * maintaining their weight what they want to weigh is noise.
+ */
+export function QuestionField(props: Props) {
+	const { field, context } = props;
+	const id = useId();
+	const helpId = `${id}-help`;
+
+	if (field.when && !field.when(context)) return null;
+
+	const help = field.help && (
+		<p className="text-pretty text-muted-foreground text-xs" id={helpId}>
+			{field.help}
+		</p>
+	);
+	const wiring: Wiring = { describedBy: field.help ? helpId : undefined, id };
+
+	// A group of radios or checkboxes has no single control to point a `for` at,
+	// so it carries the label inside itself as a `<legend>` instead.
+	if (GROUPED.has(field.type))
+		return (
+			<div className="grid gap-2">
+				<QuestionControl {...props} {...wiring} help={help} />
+			</div>
+		);
+
+	return (
+		<div className="grid gap-2">
+			<Label htmlFor={id}>{labelWithUnit(field, props.system)}</Label>
+			{help}
+			<QuestionControl {...props} {...wiring} />
+		</div>
+	);
+}
+
+/**
+ * A measured quantity is labelled in whichever system the user picked. Feet and
+ * inches is not a plain quantity, so it is left off the label there and carried
+ * by the slider's `aria-valuetext` instead.
+ */
+function labelWithUnit(field: Field, system: UnitSystem) {
+	if (field.type !== "number") return field.label;
+	const unit = field.measure
+		? displayMeasure(0, field.measure, system).unit
+		: field.unit;
+	return unit ? `${field.label} (${unit})` : field.label;
+}
+
+/** The control alone. `QuestionField` is what wires a name to it. */
+export function QuestionControl(
+	props: Props & Wiring & { help?: React.ReactNode },
+) {
 	const { field } = props;
 
 	switch (field.type) {
@@ -51,22 +147,45 @@ export function QuestionControl(props: Props) {
 	}
 }
 
+/** The tick or square beside a chosen option. Colour is never the only signal. */
+function Marker({ on, multiple }: { on: boolean; multiple: boolean }) {
+	return (
+		<span
+			aria-hidden="true"
+			className={cn(
+				"flex size-5 shrink-0 items-center justify-center border transition-colors",
+				// A square reads as "pick several", a circle as "pick one".
+				multiple ? "rounded-md" : "rounded-full",
+				on
+					? "border-foreground bg-foreground text-background"
+					: "border-border",
+			)}
+		>
+			{on && <CheckIcon className="size-3" strokeWidth={3} />}
+		</span>
+	);
+}
+
 /**
  * Radio or checkbox semantics under the hood, so keyboard and screen reader
- * behaviour is the platform's. Up to four short options lay out as a row of
- * pills; anything longer stacks, because truncated choices are unreadable.
+ * behaviour is the platform's rather than a reimplementation of it.
  */
 function ChoiceList({
 	field,
 	value,
 	onChange,
+	describedBy,
+	help,
 	multiple = false,
-}: Props & {
-	field: Extract<Field, { type: "select" | "multiselect" }>;
-	multiple?: boolean;
-}) {
+}: Props &
+	Wiring & {
+		field: Extract<Field, { type: "select" | "multiselect" }>;
+		help?: React.ReactNode;
+		multiple?: boolean;
+	}) {
 	const name = useId();
 	const options = Object.entries(field.options);
+	const chips = options.every(([, label]) => label.length <= CHIP_LIMIT);
 	const selected = multiple
 		? Array.isArray(value)
 			? value
@@ -75,86 +194,65 @@ function ChoiceList({
 			? [value]
 			: [];
 
-	const asRow =
-		options.length <= 4 &&
-		options.every(([, label]) => label.length <= 24) &&
-		!multiple;
-
 	return (
-		<fieldset
-			className={cn(
-				"w-full",
-				asRow ? "flex gap-2 rounded-2xl bg-muted p-1" : "grid gap-2.5",
-				// Past four, a single column is a lot of scrolling on a wide screen.
-				!asRow && options.length > 4 && "sm:grid-cols-2",
-			)}
-		>
-			<legend className="sr-only">{field.question ?? field.label}</legend>
-			{options.map(([option, label]) => {
-				const isOn = selected.includes(option);
-				return (
-					<label
-						className={cn(
-							"group relative flex cursor-pointer items-center gap-3 transition-colors",
-							"has-focus-visible:ring-3 has-focus-visible:ring-ring/50",
-							asRow
-								? "flex-1 justify-center rounded-xl px-4 py-2.5 text-center font-medium text-muted-foreground text-sm has-checked:bg-background has-checked:text-foreground has-checked:shadow-sm has-checked:ring-1 has-checked:ring-border"
-								: "min-h-14 rounded-2xl border border-border px-4 py-3.5 text-left has-checked:border-primary has-checked:bg-primary/5",
-						)}
-						key={option}
-					>
-						<input
-							// The visible text sits beside a visually hidden input, and
-							// not every tool picks that up as the name. Naming it
-							// explicitly with the same words removes the doubt.
-							aria-label={label}
-							checked={isOn}
-							className="sr-only"
-							name={multiple ? `${name}-${option}` : name}
-							onChange={(event) => {
-								if (!multiple) {
-									onChange(field.name, option);
-									return;
-								}
-								onChange(
-									field.name,
-									event.target.checked
-										? [...selected, option]
-										: selected.filter((item) => item !== option),
-								);
-							}}
-							type={multiple ? "checkbox" : "radio"}
-							value={option}
-						/>
-						<span className="flex-1 text-pretty">{label}</span>
-						{!asRow && (
-							<span
-								aria-hidden="true"
-								className={cn(
-									"flex size-5 shrink-0 items-center justify-center border transition-colors",
-									// A square reads as "pick several", a circle as "pick one".
-									multiple ? "rounded-md" : "rounded-full",
-									isOn
-										? "border-primary bg-primary text-primary-foreground"
-										: "border-border",
-								)}
-							>
-								{isOn && <CheckIcon className="size-3.5" />}
+		<fieldset aria-describedby={describedBy}>
+			<legend className="mb-2 font-medium text-sm leading-none">
+				{field.label}
+			</legend>
+			{help}
+			<div
+				className={cn(
+					"mt-2 gap-2",
+					chips ? "flex flex-wrap" : "grid sm:grid-cols-2",
+				)}
+			>
+				{options.map(([option, label]) => {
+					const isOn = selected.includes(option);
+					return (
+						<label className={chips ? OPTION_CHIP : OPTION_ROW} key={option}>
+							<input
+								checked={isOn}
+								className="sr-only"
+								name={multiple ? `${name}-${option}` : name}
+								onChange={(event) => {
+									if (!multiple) {
+										onChange(field.name, option);
+										return;
+									}
+									onChange(
+										field.name,
+										event.target.checked
+											? [...selected, option]
+											: selected.filter((item) => item !== option),
+									);
+								}}
+								type={multiple ? "checkbox" : "radio"}
+								value={option}
+							/>
+							<Marker multiple={multiple} on={isOn} />
+							<span className="flex-1 text-pretty font-medium text-sm">
+								{label}
 							</span>
-						)}
-					</label>
-				);
-			})}
+						</label>
+					);
+				})}
+			</div>
 		</fieldset>
 	);
 }
 
-/** The visibility question, as two choices rather than a checkbox. */
+/** The visibility question, as two choices rather than a bare checkbox. */
 function ToggleChoice({
 	field,
 	value,
 	onChange,
-}: Props & { field: Extract<Field, { type: "toggle" }> }) {
+	describedBy,
+	help,
+}: Props &
+	Wiring & {
+		field: Extract<Field, { type: "toggle" }>;
+		help?: React.ReactNode;
+	}) {
 	const name = useId();
 	const options = [
 		{ on: true, label: field.onLabel },
@@ -162,49 +260,39 @@ function ToggleChoice({
 	];
 
 	return (
-		<fieldset className="flex w-full flex-col gap-2.5">
-			<legend className="sr-only">{field.question ?? field.label}</legend>
-			{options.map((option) => {
-				const isOn = value === option.on;
-				return (
-					<label
-						className={cn(
-							"flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border border-border px-4 py-3.5",
-							"transition-colors has-focus-visible:ring-3 has-focus-visible:ring-ring/50",
-							"has-checked:border-primary has-checked:bg-primary/5",
-						)}
-						key={String(option.on)}
-					>
-						<input
-							aria-label={option.label}
-							checked={isOn}
-							className="sr-only"
-							name={name}
-							onChange={() => onChange(field.name, option.on)}
-							type="radio"
-							value={String(option.on)}
-						/>
-						<span className="flex-1 text-pretty">{option.label}</span>
-						<span
-							aria-hidden="true"
-							className={cn(
-								"flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
-								isOn
-									? "border-primary bg-primary text-primary-foreground"
-									: "border-border",
-							)}
-						>
-							{isOn && <CheckIcon className="size-3.5" />}
-						</span>
-					</label>
-				);
-			})}
+		<fieldset aria-describedby={describedBy}>
+			<legend className="mb-2 font-medium text-sm leading-none">
+				{field.label}
+			</legend>
+			{help}
+			<div className="mt-2 grid gap-2">
+				{options.map((option) => {
+					const isOn = value === option.on;
+					return (
+						<label className={OPTION_ROW} key={String(option.on)}>
+							<input
+								checked={isOn}
+								className="sr-only"
+								name={name}
+								onChange={() => onChange(field.name, option.on)}
+								type="radio"
+								value={String(option.on)}
+							/>
+							<Marker multiple={false} on={isOn} />
+							<span className="flex-1 text-pretty font-medium text-sm">
+								{option.label}
+							</span>
+						</label>
+					);
+				})}
+			</div>
 		</fieldset>
 	);
 }
 
 /**
- * A big readout over a slider, with a unit switch when the quantity converts.
+ * A readout over a slider. The number is the answer, so it is the thing that is
+ * big; the slider under it is how the number is changed.
  *
  * ponytail: the slider covers the ordinary range, not the full validated one,
  * so an outlier has to be typed in Settings. Give the readout an input here if
@@ -215,8 +303,10 @@ function MeasureInput({
 	value,
 	onChange,
 	system,
-}: Props & { field: Extract<Field, { type: "number" }> }) {
-	const id = useId();
+	context,
+	id,
+	describedBy,
+}: Props & Wiring & { field: Extract<Field, { type: "number" }> }) {
 	const measure = field.measure;
 	const current = typeof value === "number" ? value : defaultFor(measure);
 	const shown = measure
@@ -225,47 +315,67 @@ function MeasureInput({
 
 	const min = field.sliderMin ?? field.min;
 	const max = field.sliderMax ?? field.max;
+	const clamped = Math.min(Math.max(current, min), max);
+	// Drives the filled part of the WebKit track, which has no `::-moz-range-
+	// progress` equivalent and so has to be painted as a gradient.
+	const fill = `${((clamped - min) / (max - min)) * 100}%`;
 
 	return (
-		<div className="flex w-full flex-col items-center gap-8">
-			{measure && (
-				<UnitSwitch
-					measure={measure}
-					onChange={(next) => onChange("units", next)}
-					system={system}
-				/>
-			)}
-
-			<p className="flex items-baseline justify-center gap-2">
+		<div className="flex w-full flex-col gap-2">
+			<p className="flex items-baseline gap-1.5">
+				{/* Tabular figures: without them the readout changes width as it
+				    counts, and drags the unit beside it back and forth. */}
 				<output
-					className="font-semibold text-6xl tabular-nums tracking-tight sm:text-7xl md:text-8xl"
+					className="font-semibold text-3xl tabular-nums tracking-[-0.03em]"
 					htmlFor={id}
 				>
 					{shown.text}
 				</output>
 				{shown.unit && (
-					<span className="font-medium text-2xl text-muted-foreground">
+					<span className="font-medium text-base text-muted-foreground">
 						{shown.unit}
 					</span>
 				)}
+				<Remaining
+					context={context}
+					current={current}
+					field={field}
+					system={system}
+				/>
 			</p>
 
 			<div className="w-full">
 				<input
-					aria-label={`${field.label}${unitLabel(measure, system) ? ` in ${unitLabel(measure, system)}` : ""}`}
+					aria-describedby={describedBy}
 					aria-valuetext={`${shown.text} ${shown.unit}`.trim()}
-					className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-4"
+					className={cn(
+						// The padding is the touch target: the bar itself is 8px, which
+						// is under half of what a thumb needs to be grabbable.
+						"w-full cursor-pointer appearance-none bg-transparent py-2.5 outline-none",
+						"[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full",
+						"[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,var(--color-primary)_var(--fill),var(--color-muted)_var(--fill))]",
+						"[&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-muted",
+						"[&::-moz-range-progress]:h-2 [&::-moz-range-progress]:rounded-full [&::-moz-range-progress]:bg-primary",
+						// 24px, the WCAG target minimum, pulled up by half its overhang
+						// so it sits centred on the 8px track.
+						"[&::-webkit-slider-thumb]:-mt-2 [&::-webkit-slider-thumb]:size-6 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full",
+						"[&::-webkit-slider-thumb]:border-4 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-sm",
+						"[&::-moz-range-thumb]:size-6 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-4 [&::-moz-range-thumb]:border-background [&::-moz-range-thumb]:bg-primary",
+						"focus-visible:[&::-webkit-slider-thumb]:ring-3 focus-visible:[&::-webkit-slider-thumb]:ring-ring/50",
+						"focus-visible:[&::-moz-range-thumb]:ring-3 focus-visible:[&::-moz-range-thumb]:ring-ring/50",
+					)}
 					id={id}
 					max={max}
 					min={min}
 					onChange={(event) => onChange(field.name, event.target.valueAsNumber)}
 					step={field.step ?? 1}
+					style={{ "--fill": fill } as React.CSSProperties}
 					type="range"
-					value={Math.min(Math.max(current, min), max)}
+					value={clamped}
 				/>
 				<div
 					aria-hidden="true"
-					className="mt-2 flex justify-between text-muted-foreground text-xs tabular-nums"
+					className="flex justify-between text-muted-foreground text-xs tabular-nums"
 				>
 					{[min, (min + max) / 2, max].map((tick) => (
 						<span key={tick}>
@@ -278,47 +388,40 @@ function MeasureInput({
 	);
 }
 
-/** The lbs/kg switch from the reference, writing straight to the preference. */
-function UnitSwitch({
-	measure,
+/**
+ * How far the target weight is from today's, beside the target. The distance is
+ * the thing anyone actually wants from this question, and making them subtract
+ * two numbers to get it is the sort of small tax that adds up to a bad form.
+ */
+function Remaining({
+	field,
+	current,
+	context,
 	system,
-	onChange,
 }: {
-	measure: "length" | "mass";
+	field: Extract<Field, { type: "number" }>;
+	current: number;
+	context: SettingsValues;
 	system: UnitSystem;
-	onChange: (system: UnitSystem) => void;
 }) {
-	const name = useId();
-	const options: { system: UnitSystem; label: string }[] = [
-		{ system: "imperial", label: measure === "mass" ? "lb" : "ft, in" },
-		{ system: "metric", label: measure === "mass" ? "kg" : "cm" },
-	];
+	if (field.name !== "targetWeightKg") return null;
+	// The same fallback the weight slider itself draws, and the same one that
+	// gets saved if it is never touched — reading `context.weightKg` raw would
+	// leave this blank on every first run, since an untouched slider shows a
+	// number it has not stored.
+	const from =
+		typeof context.weightKg === "number"
+			? context.weightKg
+			: defaultFor("mass");
 
+	const gap = Math.abs(from - current);
+	if (gap < 0.5) return null;
+
+	const shown = displayMeasure(gap, "mass", system);
 	return (
-		<fieldset className="flex gap-1 rounded-2xl bg-muted p-1">
-			<legend className="sr-only">Units</legend>
-			{options.map((option) => (
-				<label
-					className={cn(
-						"min-w-24 cursor-pointer rounded-xl px-5 py-2 text-center font-medium text-muted-foreground text-sm transition-colors",
-						"has-focus-visible:ring-3 has-focus-visible:ring-ring/50",
-						"has-checked:bg-background has-checked:text-foreground has-checked:shadow-sm has-checked:ring-1 has-checked:ring-border",
-					)}
-					key={option.system}
-				>
-					<input
-						aria-label={option.label}
-						checked={system === option.system}
-						className="sr-only"
-						name={name}
-						onChange={() => onChange(option.system)}
-						type="radio"
-						value={option.system}
-					/>
-					{option.label}
-				</label>
-			))}
-		</fieldset>
+		<span className="text-muted-foreground text-sm tabular-nums">
+			{shown.text} {shown.unit} {from > current ? "to lose" : "to gain"}
+		</span>
 	);
 }
 
@@ -326,10 +429,14 @@ function LongText({
 	field,
 	value,
 	onChange,
-}: Props & { field: Extract<Field, { type: "textarea" }> }) {
+	id,
+	describedBy,
+}: Props & Wiring & { field: Extract<Field, { type: "textarea" }> }) {
 	return (
 		<textarea
-			className="min-h-32 w-full rounded-2xl border border-input bg-transparent px-4 py-3 text-base outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+			aria-describedby={describedBy}
+			className="min-h-20 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-base outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
+			id={id}
 			maxLength={1000}
 			onChange={(event) => onChange(field.name, event.target.value || null)}
 			placeholder={field.placeholder}
@@ -339,20 +446,62 @@ function LongText({
 	);
 }
 
+/**
+ * The browser's own date field, the same one Settings uses. A calendar grid
+ * looks friendlier and is worse for this question specifically: a date of birth
+ * is decades back, and typing eight digits beats navigating there.
+ */
 function DateInput({
 	field,
 	value,
 	onChange,
-}: Props & { field: Extract<Field, { type: "date" }> }) {
+	id,
+	describedBy,
+}: Props & Wiring & { field: Extract<Field, { type: "date" }> }) {
 	return (
-		<Input
-			className="h-14 rounded-2xl text-center text-lg"
-			max={new Date().toISOString().slice(0, 10)}
-			min="1900-01-01"
-			onChange={(event) => onChange(field.name, event.target.value || null)}
-			type="date"
-			value={typeof value === "string" ? value : ""}
-		/>
+		<div className="flex flex-col gap-1.5">
+			<Input
+				aria-describedby={describedBy}
+				className="h-11 max-w-52 text-base md:text-base"
+				id={id}
+				max={new Date().toISOString().slice(0, 10)}
+				min="1900-01-01"
+				onChange={(event) => onChange(field.name, event.target.value || null)}
+				type="date"
+				value={typeof value === "string" ? value : ""}
+			/>
+			<Age value={value} />
+		</div>
+	);
+}
+
+/**
+ * The age the date works out to, echoed back. It is what the answer is actually
+ * for, and seeing it appear is how a typo in the year gets caught here rather
+ * than in a calorie target four screens later.
+ */
+function Age({ value }: { value: Answer }) {
+	if (typeof value !== "string" || value === "") return null;
+
+	// Deliberately not `new Date(value)`, which parses `YYYY-MM-DD` as UTC
+	// midnight — west of Greenwich that is the day before.
+	const [year, month, day] = value.split("-").map(Number);
+	if (!year || !month || !day) return null;
+
+	const today = new Date();
+	const beforeBirthday =
+		today.getMonth() + 1 < month ||
+		(today.getMonth() + 1 === month && today.getDate() < day);
+	const age = today.getFullYear() - year - (beforeBirthday ? 1 : 0);
+	if (age < 0 || age > 120) return null;
+
+	return (
+		<p
+			aria-live="polite"
+			className="text-muted-foreground text-xs tabular-nums"
+		>
+			{age} years old
+		</p>
 	);
 }
 
@@ -361,21 +510,37 @@ function ShortText({
 	value,
 	onChange,
 	availability,
-}: Props & { field: Extract<Field, { type: "text" }> }) {
+	id,
+	describedBy,
+}: Props & Wiring & { field: Extract<Field, { type: "text" }> }) {
 	const isUsername = field.name === "username";
+	const statusId = `${id}-status`;
 
 	return (
-		<div className="flex w-full flex-col gap-2">
-			<div className="flex items-center gap-2">
+		<div className="flex w-full flex-col gap-1.5">
+			<div className="relative max-w-md">
 				{field.prefix && (
-					<span className="shrink-0 text-lg text-muted-foreground">
+					// Inside the field rather than beside it: an `@` floating outside
+					// the border reads as a separate thing from what is being typed.
+					<span
+						aria-hidden="true"
+						className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-base text-muted-foreground"
+					>
 						{field.prefix}
 					</span>
 				)}
 				<Input
+					aria-describedby={
+						[describedBy, isUsername && statusId].filter(Boolean).join(" ") ||
+						undefined
+					}
 					autoCapitalize={isUsername ? "none" : undefined}
 					autoComplete={isUsername ? "off" : "name"}
-					className="h-14 rounded-2xl text-lg"
+					className={cn(
+						"h-11 w-full rounded-lg text-base md:text-base",
+						field.prefix && "pl-7",
+					)}
+					id={id}
 					maxLength={100}
 					onBlur={isUsername ? availability.check : undefined}
 					onChange={(event) => {
@@ -383,13 +548,17 @@ function ShortText({
 						onChange(field.name, event.target.value || null);
 					}}
 					placeholder={field.placeholder}
-					required
+					spellCheck={!isUsername}
 					type="text"
 					value={typeof value === "string" ? value : ""}
 				/>
 			</div>
 			{isUsername && (
-				<UsernameStatus availability={availability} className="text-sm" />
+				<UsernameStatus
+					availability={availability}
+					className="text-xs"
+					id={statusId}
+				/>
 			)}
 		</div>
 	);

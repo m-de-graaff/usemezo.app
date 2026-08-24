@@ -79,6 +79,31 @@ export const FITNESS_EXPERIENCE: Options = {
 	athlete: "Competitive athlete",
 };
 
+/**
+ * Which way the user wants their weight to go. Separate from `GOALS`, which is
+ * about what they came here for: someone can want to sleep better and build
+ * muscle at the same time, but the calorie target has to move in one direction.
+ */
+export const GOAL_DIRECTIONS: Options = {
+	lose: "Lose weight",
+	maintain: "Stay where I am",
+	gain: "Gain weight or muscle",
+};
+
+/**
+ * Daily movement, which is the input a resting metabolic rate has to be
+ * multiplied by to become a daily one. The keys are the keys of
+ * `ACTIVITY_MULTIPLIERS` in `./plan`, and `plan.test.ts` holds the two lists
+ * together.
+ */
+export const ACTIVITY_LEVELS: Options = {
+	sedentary: "Mostly sitting (desk job, little exercise)",
+	light: "Lightly active (light exercise 1 to 3 days a week)",
+	moderate: "Moderately active (exercise 3 to 5 days a week)",
+	active: "Very active (hard exercise 6 to 7 days a week)",
+	"very-active": "Extremely active (physical job, or training twice a day)",
+};
+
 export const SLEEP_HOURS: Options = {
 	"under-5": "Under 5 hours",
 	"5-6": "5 to 6 hours",
@@ -196,6 +221,10 @@ export const profileInput = z.object({
 	bodyType: enumOf(BODY_TYPES).nullish(),
 	heightCm: z.number().int().min(80).max(250).nullish(),
 	weightKg: z.number().min(25).max(400).nullish(),
+	goalDirection: enumOf(GOAL_DIRECTIONS).nullish(),
+	// The same bounds as `weightKg`: it is a weight, and one the plan divides by.
+	targetWeightKg: z.number().min(25).max(400).nullish(),
+	activityLevel: enumOf(ACTIVITY_LEVELS).nullish(),
 
 	eatingHabits: enumOf(EATING_HABITS).nullish(),
 	dailyCalories: z.number().int().min(500).max(10000).nullish(),
@@ -214,10 +243,21 @@ type FieldBase = {
 	label: string;
 	help?: string;
 	/**
-	 * How onboarding asks for this, one question to a screen. Settings uses
-	 * `label` instead, because it shows the whole section at once.
+	 * The heading onboarding puts above a screen that asks only this. Kept for
+	 * the fields that are still the whole point of their screen; a grouped
+	 * screen uses `label` per field and its own heading above them.
 	 */
 	question?: string;
+	/**
+	 * Whether the question applies at all, given the answers so far. A field
+	 * whose predicate is false is not rendered and not saved — asking someone
+	 * who is maintaining their weight what they want to weigh is noise, and
+	 * writing a target they never set is worse than noise.
+	 *
+	 * Takes the whole answer set rather than one field, so a rule can depend on
+	 * two answers without the caller knowing which.
+	 */
+	when?: (values: Partial<Record<keyof ProfileInput, unknown>>) => boolean;
 };
 
 export type Field = FieldBase &
@@ -338,6 +378,31 @@ export const SECTIONS: readonly Section[] = [
 			},
 			{
 				type: "select",
+				name: "goalDirection",
+				label: "Where you want your weight to go",
+				question: "Where do you want your weight to go?",
+				options: GOAL_DIRECTIONS,
+				help: "This is the one thing that decides whether your calorie target sits above or below maintenance.",
+			},
+			{
+				type: "number",
+				name: "targetWeightKg",
+				label: "Weight you are aiming for",
+				question: "What weight are you aiming for?",
+				min: 25,
+				max: 400,
+				step: 0.1,
+				measure: "mass",
+				sliderMin: 40,
+				sliderMax: 180,
+				help: "A destination, not a deadline. It turns your target into a rough pace.",
+				// Nothing to aim at when the answer is "stay where I am", and no
+				// honest value to store either.
+				when: (values) =>
+					values.goalDirection === "lose" || values.goalDirection === "gain",
+			},
+			{
+				type: "select",
 				name: "fitnessExperience",
 				label: "Previous fitness experience",
 				question: "How much training have you done?",
@@ -394,6 +459,14 @@ export const SECTIONS: readonly Section[] = [
 				measure: "mass",
 				sliderMin: 40,
 				sliderMax: 180,
+			},
+			{
+				type: "select",
+				name: "activityLevel",
+				label: "How active your week is",
+				question: "How active is a typical week?",
+				options: ACTIVITY_LEVELS,
+				help: "Everything you do in a day, not just training. Without it, a daily calorie figure is a guess.",
 			},
 		],
 	},
@@ -464,3 +537,125 @@ export const SECTIONS: readonly Section[] = [
 
 export const findSection = (slug: string) =>
 	SECTIONS.find((section) => section.slug === slug);
+
+/**
+ * What first run asks, as four screens of related questions.
+ *
+ * Everything else in `SECTIONS` is answerable later in Settings, and the gap
+ * between the two lists is the gap between an onboarding people finish and one
+ * they abandon. The bar for being here: without it, Mezo cannot address you,
+ * host your profile, pick a unit, or put a single honest number on the plan
+ * screen. Blood type, training history, sleep, diet and medications all fail
+ * that bar — they make answers better, they are not what makes one possible.
+ *
+ * Grouped rather than one question per screen, because the questions on a
+ * screen are the same question: a name, a birthday and a gender are "who are
+ * you", and splitting them across three screens makes the flow feel four times
+ * as long without making any single answer easier to give.
+ *
+ * The copy lives here rather than in the component for the same reason a
+ * question's `help` does: it belongs to the spec, not to the layout.
+ */
+const ONBOARDING_PLAN = [
+	{
+		title: "You",
+		heading: "Start with you",
+		blurb:
+			"Age and build decide what a healthy range even means. This is what keeps every number after it from being a guess.",
+		aside:
+			"None of this appears on your profile. Your birthday is used to age-adjust ranges and for nothing else.",
+		fields: ["name", "birthDate", "gender"],
+	},
+	{
+		title: "Goals",
+		heading: "Aim at something",
+		blurb:
+			"Training, food and sleep all get pulled towards whatever you pick here. Change it whenever it changes.",
+		aside:
+			"Pick as many as you like. Mezo weighs them against each other rather than making you commit to one.",
+		fields: ["goals", "goalDirection"],
+	},
+	{
+		title: "Body",
+		heading: "Your numbers",
+		blurb:
+			"Stored in metric, shown however you think. These are the whole input to your starting plan.",
+		aside:
+			"Rough is fine. A number you can correct beats a blank Mezo has to work around.",
+		// The target weight sits after the current one on purpose: it is the only
+		// order in which "12 kg to lose" can be shown beside it as it is chosen.
+		fields: [
+			"units",
+			"heightCm",
+			"weightKg",
+			"activityLevel",
+			"targetWeightKg",
+		],
+	},
+	{
+		title: "Handle",
+		heading: "Claim your handle",
+		blurb:
+			"Your profile lives at mezo.app/@yourname. Health answers stay private whichever way you set the switch.",
+		aside:
+			"The only screen with anything on it other people can see, and only if you say so.",
+		fields: ["username", "isPublic"],
+	},
+] as const satisfies readonly {
+	title: string;
+	heading: string;
+	blurb: string;
+	aside: string;
+	fields: readonly Field["name"][];
+}[];
+
+export type OnboardingScreen = {
+	/** The node on the progress bar, and the panel's chapter heading. */
+	title: string;
+	/** The `<h1>` on the screen. */
+	heading: string;
+	blurb: string;
+	/**
+	 * What the panel beside the questions says. Deliberately not `blurb`: the
+	 * two are on screen together, and repeating one paragraph in two places is
+	 * how a layout stops being read at all.
+	 */
+	aside: string;
+	fields: readonly Field[];
+};
+
+/**
+ * The fields that hold the Continue button. Everything else on a screen can be
+ * left empty and filled in later from Settings — the plan screen says what it
+ * could not work out rather than the flow refusing to move.
+ *
+ * These three are here because the app cannot function without them: a name to
+ * address you by, a unit system to render every number in, and a handle for the
+ * profile route.
+ */
+export const ONBOARDING_REQUIRED: ReadonlySet<Field["name"]> = new Set([
+	"name",
+	"units",
+	"username",
+]);
+
+const fieldNamed = (name: Field["name"]) => {
+	const field = SECTIONS.flatMap((section) => section.fields).find(
+		(candidate) => candidate.name === name,
+	);
+	// Renaming a field in `SECTIONS` without fixing the plan above would
+	// otherwise drop a question silently.
+	if (!field) throw new Error(`Onboarding asks for unknown field "${name}"`);
+	return field;
+};
+
+/**
+ * The plan with its field names resolved against `SECTIONS`, so a question is
+ * specified in exactly one place and asking for one that does not exist is a
+ * crash at import rather than a screen that quietly renders nothing.
+ */
+export const ONBOARDING_SCREENS: readonly OnboardingScreen[] =
+	ONBOARDING_PLAN.map((screen) => ({
+		...screen,
+		fields: screen.fields.map(fieldNamed),
+	}));
