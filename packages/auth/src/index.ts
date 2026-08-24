@@ -1,11 +1,30 @@
+import { apiKey } from "@better-auth/api-key";
+import { mcp } from "@better-auth/mcp";
+import { stripe } from "@better-auth/stripe";
 import { db } from "@mezo/db";
 import { env } from "@mezo/env";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
+import { haveIBeenPwned, jwt, lastLoginMethod } from "better-auth/plugins";
+import Stripe from "stripe";
 import { sendActionEmail } from "./email";
 
 const ONE_HOUR = 60 * 60;
+
+// Billing stays off until the keys exist, so local dev and CI boot without them.
+const stripePlugins =
+	env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET
+		? [
+				stripe({
+					stripeClient: new Stripe(env.STRIPE_SECRET_KEY),
+					stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET,
+					createCustomerOnSignUp: true,
+					// ponytail: no `subscription` block yet — that needs real plans and
+					// price ids. Add it when the pricing page exists.
+				}),
+			]
+		: [];
 
 export const auth = betterAuth({
 	baseURL: env.BETTER_AUTH_URL,
@@ -45,17 +64,26 @@ export const auth = betterAuth({
 			});
 		},
 	},
-	// Registering Google without credentials only produces a startup warning and
-	// a 500 on the first click, so leave it out until both are configured.
-	socialProviders:
-		env.BETTER_AUTH_GOOGLE_CLIENT_ID && env.BETTER_AUTH_GOOGLE_CLIENT_SECRET
+	// Registering a provider without credentials only produces a startup warning
+	// and a 500 on the first click, so leave each one out until it is configured.
+	socialProviders: {
+		...(env.BETTER_AUTH_GOOGLE_CLIENT_ID && env.BETTER_AUTH_GOOGLE_CLIENT_SECRET
 			? {
 					google: {
 						clientId: env.BETTER_AUTH_GOOGLE_CLIENT_ID,
 						clientSecret: env.BETTER_AUTH_GOOGLE_CLIENT_SECRET,
 					},
 				}
-			: {},
+			: {}),
+		...(env.BETTER_AUTH_APPLE_CLIENT_ID && env.BETTER_AUTH_APPLE_CLIENT_SECRET
+			? {
+					apple: {
+						clientId: env.BETTER_AUTH_APPLE_CLIENT_ID,
+						clientSecret: env.BETTER_AUTH_APPLE_CLIENT_SECRET,
+					},
+				}
+			: {}),
+	},
 	rateLimit: {
 		// On by default only in production; on everywhere so dev exercises it too.
 		enabled: true,
@@ -73,8 +101,30 @@ export const auth = betterAuth({
 			"/send-verification-email": { window: 60, max: 3 },
 		},
 	},
-	// Lets server actions persist the session cookie. Must stay last.
-	plugins: [nextCookies()],
+	plugins: [
+		// Rejects passwords that appear in a known breach, checked k-anonymously
+		// against the Have I Been Pwned range API.
+		haveIBeenPwned({
+			customPasswordCompromisedMessage:
+				"That password has shown up in a data breach. Please pick a different one.",
+		}),
+		// Remembers which provider was used last so the sign-in page can point at
+		// it. Cookie-backed by default — no schema change.
+		lastLoginMethod(),
+		// Signs the tokens the MCP authorization server hands out.
+		jwt(),
+		// OAuth 2.1 authorization server for MCP clients.
+		mcp({
+			loginPage: "/sign-in",
+			consentPage: "/oauth/consent",
+			resource: `${env.BETTER_AUTH_URL}/api/auth/mcp`,
+		}),
+		// Programmatic access for the future public API.
+		apiKey(),
+		...stripePlugins,
+		// Lets server actions persist the session cookie. Must stay last.
+		nextCookies(),
+	],
 });
 
 export type Session = typeof auth.$Infer.Session;

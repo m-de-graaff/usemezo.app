@@ -22,6 +22,15 @@ export const env = createEnv({
 			process.env.NODE_ENV === "production"
 				? z.string()
 				: z.string().optional(),
+		// Apple's "client secret" is a short-lived JWT you generate from the
+		// private key; both stay optional so the provider is simply skipped
+		// until they are set.
+		BETTER_AUTH_APPLE_CLIENT_ID: z.string().optional(),
+		BETTER_AUTH_APPLE_CLIENT_SECRET: z.string().optional(),
+		// Optional everywhere for now: billing is wired but has no plans yet, so
+		// the Stripe plugin stays off until the keys exist.
+		STRIPE_SECRET_KEY: z.string().optional(),
+		STRIPE_WEBHOOK_SECRET: z.string().optional(),
 		// Resend sends real mail. Leave it unset in development and everything
 		// goes to SMTP_URL (a local Mailpit) instead.
 		RESEND_API_KEY:
@@ -55,6 +64,11 @@ export const env = createEnv({
 		BETTER_AUTH_GOOGLE_CLIENT_ID: process.env.BETTER_AUTH_GOOGLE_CLIENT_ID,
 		BETTER_AUTH_GOOGLE_CLIENT_SECRET:
 			process.env.BETTER_AUTH_GOOGLE_CLIENT_SECRET,
+		BETTER_AUTH_APPLE_CLIENT_ID: process.env.BETTER_AUTH_APPLE_CLIENT_ID,
+		BETTER_AUTH_APPLE_CLIENT_SECRET:
+			process.env.BETTER_AUTH_APPLE_CLIENT_SECRET,
+		STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+		STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
 		RESEND_API_KEY: process.env.RESEND_API_KEY,
 		SMTP_URL: process.env.SMTP_URL,
 		EMAIL_FROM: process.env.EMAIL_FROM,
