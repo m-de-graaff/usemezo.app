@@ -1,6 +1,7 @@
 "use client";
 
 import type { Field, ProfileInput } from "@mezo/api/profile-fields";
+import { Calendar } from "@mezo/ui/calendar";
 import { Input } from "@mezo/ui/input";
 import { Label } from "@mezo/ui/label";
 import { cn } from "@mezo/ui/lib/utils";
@@ -67,8 +68,16 @@ const OPTION_CHIP = cn(
  */
 const CHIP_LIMIT = 24;
 
-/** Which controls name themselves with a `<legend>` rather than a `<label>`. */
-const GROUPED = new Set<Field["type"]>(["select", "multiselect", "toggle"]);
+/**
+ * Which controls name themselves with a `<legend>` rather than a `<label>`.
+ * Each is several elements with no single one for a `for` to point at.
+ */
+const GROUPED = new Set<Field["type"]>([
+	"select",
+	"multiselect",
+	"toggle",
+	"date",
+]);
 
 /**
  * One question on a screen that asks several: its own label, its own help text,
@@ -447,31 +456,71 @@ function LongText({
 }
 
 /**
- * The browser's own date field, the same one Settings uses. A calendar grid
- * looks friendlier and is worse for this question specifically: a date of birth
- * is decades back, and typing eight digits beats navigating there.
+ * `YYYY-MM-DD` from a local date. Deliberately not `toISOString`, which is UTC:
+ * for anyone east of Greenwich, a date picked at local midnight comes back as
+ * the day before.
+ */
+function isoDate(date: Date) {
+	const month = `${date.getMonth() + 1}`.padStart(2, "0");
+	const day = `${date.getDate()}`.padStart(2, "0");
+	return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/** The same trap in reverse: `new Date("1990-05-04")` parses as UTC midnight. */
+function fromIsoDate(value: unknown) {
+	if (typeof value !== "string") return undefined;
+	const [year, month, day] = value.split("-").map(Number);
+	if (!year || !month || !day) return undefined;
+	return new Date(year, month - 1, day);
+}
+
+const EARLIEST_BIRTH = new Date(1900, 0, 1);
+
+/**
+ * A calendar rather than a text field. It has no single control to point a
+ * `for` at, so like the option groups it names itself with a `<legend>` and is
+ * listed in `GROUPED` above.
  */
 function DateInput({
 	field,
 	value,
 	onChange,
-	id,
 	describedBy,
-}: Props & Wiring & { field: Extract<Field, { type: "date" }> }) {
+	help,
+}: Props &
+	Wiring & {
+		field: Extract<Field, { type: "date" }>;
+		help?: React.ReactNode;
+	}) {
+	const selected = fromIsoDate(value);
+	const today = new Date();
+
 	return (
-		<div className="flex flex-col gap-1.5">
-			<Input
-				aria-describedby={describedBy}
-				className="h-11 max-w-52 text-base md:text-base"
-				id={id}
-				max={new Date().toISOString().slice(0, 10)}
-				min="1900-01-01"
-				onChange={(event) => onChange(field.name, event.target.value || null)}
-				type="date"
-				value={typeof value === "string" ? value : ""}
-			/>
-			<Age value={value} />
-		</div>
+		<fieldset aria-describedby={describedBy}>
+			<legend className="mb-2 font-medium text-sm leading-none">
+				{field.label}
+			</legend>
+			{help}
+			<div className="mt-2 flex flex-col gap-2">
+				<Calendar
+					// Month and year as dropdowns rather than arrows: a birthday is
+					// decades back, and paging there one month at a time is 400 clicks.
+					captionLayout="dropdown"
+					className="w-fit rounded-xl border border-border p-3"
+					// Opening on this month is always wrong for a date of birth, so
+					// start somewhere a plausible answer is in reach.
+					defaultMonth={selected ?? new Date(today.getFullYear() - 30, 0)}
+					disabled={{ after: today, before: EARLIEST_BIRTH }}
+					endMonth={today}
+					mode="single"
+					onSelect={(date) => onChange(field.name, date ? isoDate(date) : null)}
+					required={false}
+					selected={selected}
+					startMonth={EARLIEST_BIRTH}
+				/>
+				<Age value={value} />
+			</div>
+		</fieldset>
 	);
 }
 

@@ -58,7 +58,7 @@ const PLAN = ONBOARDING_SCREENS.length;
  * keyboard is up before the user reaches for it. Every other type sends focus
  * to the heading instead, so the new screen gets announced.
  */
-const TYPED = new Set<Field["type"]>(["text", "textarea", "date"]);
+const TYPED = new Set<Field["type"]>(["text", "textarea"]);
 
 const pad = (value: number) => String(value).padStart(2, "0");
 

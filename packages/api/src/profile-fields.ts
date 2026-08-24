@@ -337,8 +337,8 @@ export const SECTIONS: readonly Section[] = [
 			{
 				type: "text",
 				name: "name",
-				label: "Display name",
-				question: "What should we call you?",
+				label: "Full name",
+				question: "What is your full name?",
 			},
 			{
 				type: "date",
