@@ -231,7 +231,9 @@ function ChoiceList({
 			<div
 				className={cn(
 					"mt-2 gap-2",
-					chips ? "flex flex-wrap" : "grid sm:grid-cols-2",
+					chips
+						? "flex flex-wrap justify-center"
+						: "grid text-left sm:grid-cols-2",
 				)}
 			>
 				{options.map(([option, label]) => {
@@ -299,7 +301,7 @@ function ToggleChoice({
 				{field.label}
 			</legend>
 			{help}
-			<div className="mt-2 grid gap-2">
+			<div className="mt-2 grid gap-2 text-left">
 				{options.map((option) => {
 					const isOn = value === option.on;
 					return (
@@ -356,7 +358,7 @@ function MeasureInput({
 
 	return (
 		<div className="flex w-full flex-col gap-2">
-			<p className="flex items-baseline gap-1.5">
+			<p className="flex items-baseline justify-center gap-1.5">
 				{/* Tabular figures: without them the readout changes width as it
 				    counts, and drags the unit beside it back and forth. */}
 				<output
@@ -583,7 +585,7 @@ function DateInput({
 			</legend>
 			{help}
 
-			<div className="mt-2 flex w-full max-w-sm flex-col gap-3">
+			<div className="mt-2 flex w-full max-w-sm flex-col gap-3 self-center">
 				<div className="relative">
 					{/* One pill across all three wheels, marking the row they read
 					    from. Behind the numbers and untouchable, so a drag that
@@ -832,7 +834,7 @@ function ShortText({
 
 	return (
 		<div className="flex w-full flex-col gap-1.5">
-			<div className="relative max-w-md">
+			<div className="relative mx-auto w-full max-w-md">
 				{field.prefix && (
 					// Inside the field rather than beside it: an `@` floating outside
 					// the border reads as a separate thing from what is being typed.

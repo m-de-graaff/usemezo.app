@@ -60,7 +60,8 @@ const ACTION_BAR =
  * a screen taller than the column still grows and scrolls instead of having its
  * top centred out of reach.
  */
-const SCREEN_BODY = "flex flex-1 flex-col justify-center py-8";
+const SCREEN_BODY =
+	"flex flex-1 flex-col items-center justify-center py-8 text-center";
 
 /** Before the first question. */
 const WELCOME = -1;
@@ -295,7 +296,7 @@ export function OnboardingFlow({
 										{field.question ?? field.label}
 									</h1>
 
-									<div className="mt-8 max-w-xl">
+									<div className="mt-8 w-full max-w-xl">
 										<QuestionField
 											availability={availability}
 											context={values}
@@ -411,7 +412,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
 					could not work out without it.
 				</p>
 
-				<ul className="mt-8 grid max-w-xl gap-3">
+				<ul className="mt-8 grid w-full max-w-xl gap-3 text-left">
 					{gets.map((item) => (
 						<li
 							className="flex gap-4 rounded-2xl border border-border p-4"

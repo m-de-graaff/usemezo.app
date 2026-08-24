@@ -15,7 +15,8 @@ const MICRO =
 	"font-medium text-[0.6875rem] uppercase leading-none tracking-[0.16em]";
 
 /** Kept in step with `SCREEN_BODY` in `onboarding-flow.tsx`. */
-const SCREEN_BODY = "flex flex-1 flex-col justify-center py-8";
+const SCREEN_BODY =
+	"flex flex-1 flex-col items-center justify-center py-8 text-center";
 
 /** What each band is called on the page. Never the only signal — see below. */
 const BMI_BAND: Record<string, string> = {
@@ -116,7 +117,7 @@ function Complete({
 					talking to a doctor.
 				</p>
 
-				<div className="mt-8 grid gap-3">
+				<div className="mt-8 grid w-full gap-3">
 					{/* The number the whole flow was for, as an editable field rather
 				    than a readout with an edit affordance hidden behind it. */}
 					<div className="rounded-2xl border border-border bg-muted/40 p-5">
@@ -260,7 +261,7 @@ function Incomplete({
 					they appear on your dashboard.
 				</p>
 
-				<div className="mt-8 rounded-2xl border border-border border-dashed p-5">
+				<div className="mt-8 w-full max-w-xl rounded-2xl border border-border border-dashed p-5">
 					<p className={cn(MICRO, "text-muted-foreground")}>Still needed</p>
 					<ul className="mt-3 grid gap-2">
 						{missing.map((item) => (
