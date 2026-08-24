@@ -1,23 +1,30 @@
 "use client";
 
+import { useIsMobile } from "@mezo/ui/hooks/use-mobile";
 import { useTheme } from "@mezo/ui/theme";
 import { useEffect, useState } from "react";
 import PixelBlast from "./pixel-blast";
 
 /**
- * The dither field behind the auth forms. Achromatic on purpose: it is the
- * secondary ink colour of whichever theme is showing, so it spends none of the
- * colour budget the product reserves for data.
+ * The dither field behind the auth forms and onboarding. Achromatic on purpose:
+ * it is the secondary ink colour of whichever theme is showing, so it spends
+ * none of the colour budget the product reserves for data.
  *
- * Skipped entirely under `prefers-reduced-motion` — this is continuous ambient
- * motion carrying no information. Nothing renders until the theme resolves
- * either: that only happens on the client, and a wrong-colour first frame is
- * worse than a late one.
+ * Three things switch it off, and each returns null rather than hiding a
+ * mounted canvas — the cost here is a continuously rendering WebGL surface, so
+ * hiding it with CSS would pay for it and show nothing:
+ *
+ * - `prefers-reduced-motion`, since this is ambient motion carrying no meaning.
+ * - A phone, where it is a constant draw on a battery for pure decoration and
+ *   the form fills the screen anyway.
+ * - A theme that has not resolved yet, which only happens on the client; a
+ *   wrong-colour first frame is worse than a late one.
  */
 const INK_SECONDARY = { light: "#666669", dark: "#A0A0A8" } as const;
 
 export function Backdrop() {
 	const { resolvedTheme } = useTheme();
+	const isMobile = useIsMobile();
 	const [animate, setAnimate] = useState(false);
 
 	useEffect(() => {
@@ -28,7 +35,7 @@ export function Backdrop() {
 		return () => query.removeEventListener("change", sync);
 	}, []);
 
-	if (!animate || !resolvedTheme) return null;
+	if (!animate || isMobile || !resolvedTheme) return null;
 
 	return (
 		<div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10">
