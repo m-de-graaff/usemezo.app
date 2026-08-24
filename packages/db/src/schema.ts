@@ -329,6 +329,11 @@ export const userProfile = pgTable(
 		bodyType: text("body_type"),
 		heightCm: integer("height_cm"),
 		weightKg: real("weight_kg"),
+		/** Where the user wants their weight to go; drives the calorie target. */
+		goalDirection: text("goal_direction"),
+		targetWeightKg: real("target_weight_kg"),
+		/** Daily movement outside training. The TDEE multiplier keys off this. */
+		activityLevel: text("activity_level"),
 
 		// Nutrition
 		eatingHabits: text("eating_habits"),
