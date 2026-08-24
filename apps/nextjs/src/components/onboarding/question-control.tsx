@@ -1,12 +1,11 @@
 "use client";
 
 import type { Field, ProfileInput } from "@mezo/api/profile-fields";
-import { Calendar } from "@mezo/ui/calendar";
 import { Input } from "@mezo/ui/input";
 import { Label } from "@mezo/ui/label";
 import { cn } from "@mezo/ui/lib/utils";
-import { CheckIcon } from "lucide-react";
-import { useId } from "react";
+import { CakeIcon, CheckIcon } from "lucide-react";
+import { useEffect, useId, useRef } from "react";
 import type {
 	Answer,
 	SettingsValues,
@@ -476,10 +475,42 @@ function fromIsoDate(value: unknown) {
 
 const EARLIEST_BIRTH = new Date(1900, 0, 1);
 
+const MONTHS = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
+];
+
+/** Row height in pixels. Doubles as the touch target, so it clears 44. */
+const ROW = 44;
+/** Rows visible at once. Odd, so one of them is the middle. */
+const ROWS = 5;
+
+const range = (from: number, to: number) =>
+	Array.from({ length: to - from + 1 }, (_, index) => from + index);
+
+/** February, and the months that are not thirty-one days long. */
+const daysInMonth = (year: number, month: number) =>
+	new Date(year, month + 1, 0).getDate();
+
 /**
- * A calendar rather than a text field. It has no single control to point a
- * `for` at, so like the option groups it names itself with a `<legend>` and is
- * listed in `GROUPED` above.
+ * Three wheels, one each for month, day and year.
+ *
+ * A birthday is the one date question where a calendar is the wrong control:
+ * the answer is decades back and nobody navigates to it, they know it. Three
+ * wheels put every part of it one gesture away.
+ *
+ * Like the option groups, it has no single element for a `for` to point at, so
+ * it names itself with a `<legend>` and is listed in `GROUPED` above.
  */
 function DateInput({
 	field,
@@ -492,8 +523,26 @@ function DateInput({
 		field: Extract<Field, { type: "date" }>;
 		help?: React.ReactNode;
 	}) {
-	const selected = fromIsoDate(value);
 	const today = new Date();
+	const selected = fromIsoDate(value);
+
+	// What the wheels sit on before anything is picked. Deliberately not written
+	// to the answer: a fabricated birthday would feed a real calorie target, so
+	// an untouched picker has to stay unanswered however settled it looks.
+	const shown = selected ?? new Date(today.getFullYear() - 30, 0, 1);
+	const year = shown.getFullYear();
+	const month = shown.getMonth();
+	const day = shown.getDate();
+
+	const commit = (nextYear: number, nextMonth: number, nextDay: number) => {
+		// 31 January to February has to land somewhere real.
+		const clamped = Math.min(nextDay, daysInMonth(nextYear, nextMonth));
+		const next = new Date(nextYear, nextMonth, clamped);
+		// A date in the future is not a birthday. Ignore rather than correct, so
+		// the wheel does not fight a finger mid-scroll.
+		if (next > today) return;
+		onChange(field.name, isoDate(next));
+	};
 
 	return (
 		<fieldset aria-describedby={describedBy}>
@@ -501,26 +550,155 @@ function DateInput({
 				{field.label}
 			</legend>
 			{help}
-			<div className="mt-2 flex flex-col gap-2">
-				<Calendar
-					// Month and year as dropdowns rather than arrows: a birthday is
-					// decades back, and paging there one month at a time is 400 clicks.
-					captionLayout="dropdown"
-					className="w-fit rounded-xl border border-border p-3"
-					// Opening on this month is always wrong for a date of birth, so
-					// start somewhere a plausible answer is in reach.
-					defaultMonth={selected ?? new Date(today.getFullYear() - 30, 0)}
-					disabled={{ after: today, before: EARLIEST_BIRTH }}
-					endMonth={today}
-					mode="single"
-					onSelect={(date) => onChange(field.name, date ? isoDate(date) : null)}
-					required={false}
-					selected={selected}
-					startMonth={EARLIEST_BIRTH}
-				/>
+
+			<div className="mt-2 flex w-full max-w-sm flex-col gap-3">
+				<div className="relative">
+					{/* One pill across all three wheels, marking the row they read
+					    from. Behind the numbers and untouchable, so a drag that
+					    starts on it still scrolls the wheel underneath. */}
+					<div
+						aria-hidden="true"
+						className="pointer-events-none absolute inset-x-0 top-1/2 z-0 -translate-y-1/2 rounded-xl border border-foreground bg-muted/60"
+						style={{ height: ROW }}
+					/>
+					<div className="relative z-10 flex gap-2">
+						<Wheel
+							label="Month"
+							onChange={(next) => commit(year, next, day)}
+							optionLabel={(index) => MONTHS[index] ?? ""}
+							options={range(0, 11)}
+							value={month}
+						/>
+						<Wheel
+							label="Day"
+							onChange={(next) => commit(year, month, next)}
+							optionLabel={(next) => String(next).padStart(2, "0")}
+							options={range(1, daysInMonth(year, month))}
+							value={day}
+						/>
+						<Wheel
+							label="Year"
+							onChange={(next) => commit(next, month, day)}
+							optionLabel={String}
+							options={range(EARLIEST_BIRTH.getFullYear(), today.getFullYear())}
+							value={year}
+						/>
+					</div>
+					{/* Fades the rows running out of the top and bottom of the window,
+					    which is what reads as a wheel rather than a cropped list. */}
+					<div
+						aria-hidden="true"
+						className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-gradient-to-b from-background to-transparent"
+					/>
+					<div
+						aria-hidden="true"
+						className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-16 bg-gradient-to-t from-background to-transparent"
+					/>
+				</div>
+
 				<Age value={value} />
 			</div>
 		</fieldset>
+	);
+}
+
+/**
+ * One column. A `spinbutton` rather than a listbox: the values are an ordered
+ * range and the interaction is up and down, which is exactly what the role
+ * describes and a fraction of what a listbox would need to implement.
+ *
+ * Scroll snapping does the pointer half, arrow keys the keyboard half, and both
+ * write through the same `onChange`.
+ */
+function Wheel({
+	label,
+	options,
+	value,
+	optionLabel,
+	onChange,
+}: {
+	label: string;
+	options: number[];
+	value: number;
+	optionLabel: (value: number) => string;
+	onChange: (value: number) => void;
+}) {
+	const ref = useRef<HTMLDivElement>(null);
+	const index = Math.max(0, options.indexOf(value));
+
+	// Keep the wheel under the pill when the value changes from outside — a
+	// month with fewer days clamping the day, or the first render. Guarded so it
+	// never yanks the wheel back while a finger is still on it.
+	useEffect(() => {
+		const element = ref.current;
+		if (!element) return;
+		const target = index * ROW;
+		if (Math.abs(element.scrollTop - target) < ROW / 2) return;
+		element.scrollTo({ top: target });
+	}, [index]);
+
+	const step = (by: number) => {
+		const next = options[Math.min(options.length - 1, Math.max(0, index + by))];
+		if (next !== undefined) onChange(next);
+	};
+
+	return (
+		<div
+			aria-label={label}
+			aria-valuemax={options[options.length - 1]}
+			aria-valuemin={options[0]}
+			aria-valuenow={value}
+			aria-valuetext={optionLabel(value)}
+			className="h-(--wheel-height) flex-1 snap-y snap-mandatory overflow-y-scroll rounded-xl outline-none [scrollbar-width:none] focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-scrollbar]:hidden"
+			onKeyDown={(event) => {
+				const by =
+					event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
+				if (!by) return;
+				// Otherwise the browser scrolls the column and the page both.
+				event.preventDefault();
+				step(by);
+			}}
+			onScroll={(event) => {
+				const next = options[Math.round(event.currentTarget.scrollTop / ROW)];
+				if (next !== undefined && next !== value) onChange(next);
+			}}
+			ref={ref}
+			role="spinbutton"
+			style={
+				{
+					"--wheel-height": `${ROW * ROWS}px`,
+					// Half the window above and below, so the first and last values
+					// can still reach the middle.
+					paddingBlock: (ROW * (ROWS - 1)) / 2,
+				} as React.CSSProperties
+			}
+			tabIndex={0}
+		>
+			{options.map((option, position) => {
+				const distance = Math.abs(position - index);
+				return (
+					<button
+						className={cn(
+							"flex w-full snap-center items-center justify-center text-center text-lg tabular-nums transition-colors",
+							distance === 0
+								? "font-medium text-foreground"
+								: distance === 1
+									? "text-muted-foreground"
+									: "text-muted-foreground/45",
+						)}
+						key={option}
+						onClick={() => onChange(option)}
+						style={{ height: ROW }}
+						// Each row is reachable by pointer but not by tab: the wheel
+						// itself is the one stop, and arrow keys move within it.
+						tabIndex={-1}
+						type="button"
+					>
+						{optionLabel(option)}
+					</button>
+				);
+			})}
+		</div>
 	);
 }
 
@@ -547,9 +725,12 @@ function Age({ value }: { value: Answer }) {
 	return (
 		<p
 			aria-live="polite"
-			className="text-muted-foreground text-xs tabular-nums"
+			className="flex items-center justify-center gap-2 text-muted-foreground text-sm"
 		>
-			{age} years old
+			<CakeIcon aria-hidden="true" className="size-4" />
+			<span className="tabular-nums">
+				{age} year{age === 1 ? "" : "s"} of age
+			</span>
 		</p>
 	);
 }
