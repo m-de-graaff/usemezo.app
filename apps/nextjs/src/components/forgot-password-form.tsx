@@ -15,6 +15,7 @@ import { toast } from "@mezo/ui/sonner";
 import Link from "next/link";
 import { useState } from "react";
 import { authErrorMessage } from "~/lib/auth-error";
+import { Logo } from "./logo";
 
 export function ForgotPasswordForm() {
 	const [pending, setPending] = useState(false);
@@ -42,26 +43,28 @@ export function ForgotPasswordForm() {
 	}
 
 	return (
-		<Card className="w-full max-w-sm">
+		<Card className="w-full max-w-md [--card-spacing:--spacing(6)]">
 			<CardHeader>
-				<CardTitle>Forgot your password?</CardTitle>
+				<Logo className="mb-2 text-lg" />
+				<CardTitle className="text-2xl">Forgot your password?</CardTitle>
 				<CardDescription>
 					We will email you a link to choose a new one.
 				</CardDescription>
 			</CardHeader>
-			<CardContent className="flex flex-col gap-4">
-				<form className="flex flex-col gap-4" onSubmit={onSubmit}>
+			<CardContent className="flex flex-col gap-5">
+				<form className="flex flex-col gap-5" onSubmit={onSubmit}>
 					<div className="grid gap-2">
 						<Label htmlFor="email">Email</Label>
 						<Input
 							autoComplete="email"
+							className="h-10"
 							id="email"
 							name="email"
 							required
 							type="email"
 						/>
 					</div>
-					<Button disabled={pending || sent} type="submit">
+					<Button className="h-10" disabled={pending || sent} type="submit">
 						{sent ? "Link sent" : "Send reset link"}
 					</Button>
 				</form>
