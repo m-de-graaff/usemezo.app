@@ -610,20 +610,25 @@ const ONBOARDING_PLAN = [
 	fields: readonly Field["name"][];
 }[];
 
-export type OnboardingScreen = {
+/**
+ * One of the four chapters the progress bar shows. Several questions belong to
+ * each; the questions are what get a screen.
+ */
+export type OnboardingStep = {
 	/** The node on the progress bar, and the panel's chapter heading. */
 	title: string;
-	/** The `<h1>` on the screen. */
 	heading: string;
 	blurb: string;
 	/**
-	 * What the panel beside the questions says. Deliberately not `blurb`: the
-	 * two are on screen together, and repeating one paragraph in two places is
-	 * how a layout stops being read at all.
+	 * What the panel beside the question says. Deliberately not the question's
+	 * own copy: the two are on screen together, and repeating one paragraph in
+	 * two places is how a layout stops being read at all.
 	 */
 	aside: string;
-	fields: readonly Field[];
 };
+
+/** One question, filling one screen, knowing which chapter it belongs to. */
+export type OnboardingQuestion = { field: Field; step: number };
 
 /**
  * The fields that hold the Continue button. Everything else on a screen can be
@@ -650,13 +655,19 @@ const fieldNamed = (name: Field["name"]) => {
 	return field;
 };
 
+/** The four progress nodes, in order. */
+export const ONBOARDING_STEPS: readonly OnboardingStep[] = ONBOARDING_PLAN;
+
 /**
- * The plan with its field names resolved against `SECTIONS`, so a question is
- * specified in exactly one place and asking for one that does not exist is a
- * crash at import rather than a screen that quietly renders nothing.
+ * The plan flattened to one question per screen, each still knowing which step
+ * it belongs to. Resolved against `SECTIONS`, so a question is specified in
+ * exactly one place and asking for one that does not exist is a crash at import
+ * rather than a screen that quietly renders nothing.
+ *
+ * One question to a screen rather than a chapter to a screen: a single question
+ * with room around it is answered, and a column of five is skimmed.
  */
-export const ONBOARDING_SCREENS: readonly OnboardingScreen[] =
-	ONBOARDING_PLAN.map((screen) => ({
-		...screen,
-		fields: screen.fields.map(fieldNamed),
-	}));
+export const ONBOARDING_QUESTIONS: readonly OnboardingQuestion[] =
+	ONBOARDING_PLAN.flatMap((plan, step) =>
+		plan.fields.map((name) => ({ field: fieldNamed(name), step })),
+	);

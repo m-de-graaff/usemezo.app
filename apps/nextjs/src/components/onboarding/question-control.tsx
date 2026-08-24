@@ -5,7 +5,7 @@ import { Input } from "@mezo/ui/input";
 import { Label } from "@mezo/ui/label";
 import { cn } from "@mezo/ui/lib/utils";
 import { CakeIcon, CheckIcon } from "lucide-react";
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type {
 	Answer,
 	SettingsValues,
@@ -30,6 +30,11 @@ type Wiring = {
 	/** The control's `id`, so a sibling `<label for>` names it. */
 	id?: string;
 	describedBy?: string;
+	/**
+	 * The screen's `<h1>` is already asking this question, so the control's own
+	 * label goes to screen readers only rather than being printed twice.
+	 */
+	hideLabel?: boolean;
 };
 
 /**
@@ -86,19 +91,23 @@ const GROUPED = new Set<Field["type"]>([
  * Renders nothing when the field does not apply — asking someone who is
  * maintaining their weight what they want to weigh is noise.
  */
-export function QuestionField(props: Props) {
-	const { field, context } = props;
+export function QuestionField(props: Props & { hideLabel?: boolean }) {
+	const { field, context, hideLabel } = props;
 	const id = useId();
 	const helpId = `${id}-help`;
 
 	if (field.when && !field.when(context)) return null;
 
 	const help = field.help && (
-		<p className="text-pretty text-muted-foreground text-xs" id={helpId}>
+		<p className="text-pretty text-muted-foreground text-sm" id={helpId}>
 			{field.help}
 		</p>
 	);
-	const wiring: Wiring = { describedBy: field.help ? helpId : undefined, id };
+	const wiring: Wiring = {
+		describedBy: field.help ? helpId : undefined,
+		hideLabel,
+		id,
+	};
 
 	// A group of radios or checkboxes has no single control to point a `for` at,
 	// so it carries the label inside itself as a `<legend>` instead.
@@ -111,7 +120,12 @@ export function QuestionField(props: Props) {
 
 	return (
 		<div className="grid gap-2">
-			<Label htmlFor={id}>{labelWithUnit(field, props.system)}</Label>
+			{/* Hidden rather than dropped when the screen's `<h1>` already asks the
+			    question: the control still needs a name of its own, and one that
+			    says "Height (cm)" beats one that says "How tall are you?". */}
+			<Label className={cn(hideLabel && "sr-only")} htmlFor={id}>
+				{labelWithUnit(field, props.system)}
+			</Label>
 			{help}
 			<QuestionControl {...props} {...wiring} />
 		</div>
@@ -182,6 +196,7 @@ function ChoiceList({
 	field,
 	value,
 	onChange,
+	hideLabel,
 	describedBy,
 	help,
 	multiple = false,
@@ -204,7 +219,12 @@ function ChoiceList({
 
 	return (
 		<fieldset aria-describedby={describedBy}>
-			<legend className="mb-2 font-medium text-sm leading-none">
+			<legend
+				className={cn(
+					"mb-2 font-medium text-sm leading-none",
+					hideLabel && "sr-only",
+				)}
+			>
 				{field.label}
 			</legend>
 			{help}
@@ -254,6 +274,7 @@ function ToggleChoice({
 	field,
 	value,
 	onChange,
+	hideLabel,
 	describedBy,
 	help,
 }: Props &
@@ -269,7 +290,12 @@ function ToggleChoice({
 
 	return (
 		<fieldset aria-describedby={describedBy}>
-			<legend className="mb-2 font-medium text-sm leading-none">
+			<legend
+				className={cn(
+					"mb-2 font-medium text-sm leading-none",
+					hideLabel && "sr-only",
+				)}
+			>
 				{field.label}
 			</legend>
 			{help}
@@ -516,6 +542,7 @@ function DateInput({
 	field,
 	value,
 	onChange,
+	hideLabel,
 	describedBy,
 	help,
 }: Props &
@@ -546,7 +573,12 @@ function DateInput({
 
 	return (
 		<fieldset aria-describedby={describedBy}>
-			<legend className="mb-2 font-medium text-sm leading-none">
+			<legend
+				className={cn(
+					"mb-2 font-medium text-sm leading-none",
+					hideLabel && "sr-only",
+				)}
+			>
 				{field.label}
 			</legend>
 			{help}
@@ -626,6 +658,14 @@ function Wheel({
 	const ref = useRef<HTMLDivElement>(null);
 	const index = Math.max(0, options.indexOf(value));
 
+	// Where a drag started, and how far it has travelled. Refs rather than
+	// state: this changes on every pointer event, and none of it should cost a
+	// render — only the value crossing a row does, and `onScroll` does that.
+	const drag = useRef<{ y: number; top: number } | null>(null);
+	/** How far the last gesture travelled, so a drag does not also click a row. */
+	const dragged = useRef(0);
+	const [dragging, setDragging] = useState(false);
+
 	// Keep the wheel under the pill when the value changes from outside — a
 	// month with fewer days clamping the day, or the first render. Guarded so it
 	// never yanks the wheel back while a finger is still on it.
@@ -649,7 +689,13 @@ function Wheel({
 			aria-valuemin={options[0]}
 			aria-valuenow={value}
 			aria-valuetext={optionLabel(value)}
-			className="h-(--wheel-height) flex-1 snap-y snap-mandatory overflow-y-scroll rounded-xl outline-none [scrollbar-width:none] focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-scrollbar]:hidden"
+			className={cn(
+				"h-(--wheel-height) flex-1 touch-pan-y overflow-y-scroll rounded-xl outline-none [scrollbar-width:none] focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-scrollbar]:hidden",
+				// Snapping is suspended for the length of a drag. Left on, the
+				// browser keeps yanking the wheel to the nearest row while the
+				// pointer is still moving it, which feels like a fight.
+				dragging ? "cursor-grabbing" : "cursor-grab snap-y snap-mandatory",
+			)}
 			onKeyDown={(event) => {
 				const by =
 					event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
@@ -657,6 +703,38 @@ function Wheel({
 				// Otherwise the browser scrolls the column and the page both.
 				event.preventDefault();
 				step(by);
+			}}
+			onLostPointerCapture={() => {
+				drag.current = null;
+				setDragging(false);
+			}}
+			onPointerDown={(event) => {
+				// Touch already drags a scroll container, with momentum and
+				// rubber-banding this cannot match. Only a mouse needs the help.
+				if (event.pointerType !== "mouse") return;
+				event.currentTarget.setPointerCapture(event.pointerId);
+				drag.current = { top: event.currentTarget.scrollTop, y: event.clientY };
+				dragged.current = 0;
+				setDragging(true);
+			}}
+			onPointerMove={(event) => {
+				const from = drag.current;
+				if (!from) return;
+				const by = event.clientY - from.y;
+				dragged.current = Math.max(dragged.current, Math.abs(by));
+				// Downward drag reveals earlier values, the way a physical wheel
+				// turns under a thumb.
+				event.currentTarget.scrollTop = from.top - by;
+			}}
+			onPointerUp={(event) => {
+				const from = drag.current;
+				drag.current = null;
+				setDragging(false);
+				if (!from) return;
+				// Snapping was off through the drag, so nothing has landed on a row
+				// yet. Turning it back on does not scroll, so put it there.
+				const target = Math.round(event.currentTarget.scrollTop / ROW) * ROW;
+				event.currentTarget.scrollTo({ behavior: "smooth", top: target });
 			}}
 			onScroll={(event) => {
 				const next = options[Math.round(event.currentTarget.scrollTop / ROW)];
@@ -687,7 +765,13 @@ function Wheel({
 									: "text-muted-foreground/45",
 						)}
 						key={option}
-						onClick={() => onChange(option)}
+						onClick={() => {
+							// A drag that ends over a row still fires a click. Anything
+							// past a few pixels was a drag, and the wheel has already
+							// picked the value it landed on.
+							if (dragged.current > 4) return;
+							onChange(option);
+						}}
 						style={{ height: ROW }}
 						// Each row is reachable by pointer but not by tab: the wheel
 						// itself is the one stop, and arrow keys move within it.

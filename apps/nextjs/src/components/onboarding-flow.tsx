@@ -2,8 +2,10 @@
 
 import {
 	type Field,
+	ONBOARDING_QUESTIONS,
 	ONBOARDING_REQUIRED,
-	ONBOARDING_SCREENS,
+	ONBOARDING_STEPS,
+	type OnboardingStep,
 	type ProfileInput,
 } from "@mezo/api/profile-fields";
 import { Button } from "@mezo/ui/button";
@@ -19,7 +21,7 @@ import {
 	SparklesIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Backdrop } from "~/components/backdrop";
 import { LogoMark } from "~/components/logo";
 import { PlanSummary } from "~/components/onboarding/plan-summary";
@@ -50,8 +52,6 @@ const ACTION_BAR =
 
 /** Before the first question. */
 const WELCOME = -1;
-/** After the last one. */
-const PLAN = ONBOARDING_SCREENS.length;
 
 /**
  * Question types where the answer is typed, so the field takes focus and the
@@ -90,43 +90,66 @@ export function OnboardingFlow({
 	// Where the last move went, so a screen comes in from the side it came from
 	// rather than always from the same one.
 	const [forwards, setForwards] = useState(true);
-	const screenRef = useRef<HTMLDivElement>(null);
 
 	// Answers are saved per screen, so a run that was abandoned halfway comes
 	// back to where it stopped instead of to question one.
 	const [index, setIndex] = useState(() => {
-		const answered = (field: Field) => isAnswered(initial[field.name] ?? null);
-		if (!ONBOARDING_SCREENS.some((screen) => screen.fields.some(answered)))
-			return WELCOME;
-		const next = ONBOARDING_SCREENS.findIndex(
-			(screen) => !screen.fields.every(answered),
+		const answered = ({ field }: { field: Field }) =>
+			isAnswered(initial[field.name] ?? null);
+		if (!ONBOARDING_QUESTIONS.some(answered)) return WELCOME;
+		const next = ONBOARDING_QUESTIONS.findIndex(
+			(candidate) => !answered(candidate),
 		);
-		return next === -1 ? PLAN : next;
+		return next === -1 ? ONBOARDING_QUESTIONS.length : next;
 	});
 
-	const screen = ONBOARDING_SCREENS[index];
 	const availability = useUsernameAvailability(values.username);
 	const system = unitSystem(values.units);
 
-	useEffect(() => {
-		// Nothing moves focus on its own between screens, so a screen reader
-		// would otherwise sit on the button that was just pressed and never read
-		// out the screen that replaced it.
-		//
-		// Found in the DOM rather than held in refs: every branch renders one
-		// `<h1 tabIndex={-1}>`, and querying for it means the plan screen and the
-		// welcome screen need no wiring of their own to be reachable.
-		const first = ONBOARDING_SCREENS[index]?.fields[0];
-		if (first && TYPED.has(first.type)) {
-			screenRef.current
-				?.querySelector<HTMLElement>(
-					"input:not([type=radio]):not([type=checkbox]):not([type=range]), textarea",
-				)
-				?.focus();
-			return;
-		}
-		screenRef.current?.querySelector<HTMLElement>("h1")?.focus();
-	}, [index]);
+	// A question whose `when` is false is not a screen the user steps through
+	// and skips: it is not asked at all, so it leaves the list entirely. Only
+	// answers from earlier screens can change this, so the indices behind the
+	// current one never move under it.
+	const questions = ONBOARDING_QUESTIONS.filter(
+		({ field }) => !field.when || field.when(values),
+	);
+	const plan = questions.length;
+
+	const question = questions[index];
+	const field = question?.field;
+	const step = question && ONBOARDING_STEPS[question.step];
+
+	// Decided out here rather than inside the effect, so the effect depends on a
+	// boolean instead of on `questions` — which is rebuilt every render, and
+	// would have the effect stealing focus back on every keystroke.
+	const typed = field ? TYPED.has(field.type) : false;
+
+	/**
+	 * Moves focus onto each screen as it mounts. A callback ref rather than an
+	 * effect: the screen below is keyed by `index`, so it remounts on every
+	 * change and this fires exactly then, with no dependency list to keep honest.
+	 *
+	 * Nothing else moves focus between screens, so a screen reader would
+	 * otherwise sit on the button that was just pressed and never read out the
+	 * screen that replaced it. The target is found in the DOM rather than held in
+	 * a ref, because every branch renders one `<h1 tabIndex={-1}>` and querying
+	 * for it means the welcome and plan screens need no wiring of their own.
+	 */
+	const focusScreen = useCallback(
+		(node: HTMLDivElement | null) => {
+			if (!node) return;
+			if (typed) {
+				node
+					.querySelector<HTMLElement>(
+						"input:not([type=radio]):not([type=checkbox]):not([type=range]), textarea",
+					)
+					?.focus();
+				return;
+			}
+			node.querySelector<HTMLElement>("h1")?.focus();
+		},
+		[typed],
+	);
 
 	const save = api.profile.update.useMutation({
 		onSuccess: () => advance(),
@@ -165,42 +188,26 @@ export function OnboardingFlow({
 		setValues((previous) => ({ ...previous, [name]: value }));
 	}
 
-	/** The fields on this screen that the answers so far say still apply. */
-	const asked = (screen?.fields ?? []).filter(
-		(field) => !field.when || field.when(values),
-	);
+	const answered = field ? isAnswered(values[field.name] ?? null) : true;
+	const required = field ? ONBOARDING_REQUIRED.has(field.name) : false;
 
 	const blocked =
-		asked.some(
-			(field) =>
-				ONBOARDING_REQUIRED.has(field.name) &&
-				!isAnswered(values[field.name] ?? null),
-		) ||
-		(asked.some((field) => field.name === "username") && availability.taken);
+		(required && !answered) ||
+		(field?.name === "username" && availability.taken);
 
-	// Nothing left on this screen that has to be answered, and something on it
-	// that has not been — so there is a Skip worth offering.
-	const skippable =
-		!blocked &&
-		asked.some(
-			(field) =>
-				!ONBOARDING_REQUIRED.has(field.name) &&
-				!isAnswered(values[field.name] ?? null),
-		);
+	// Nothing here that has to be answered, and nothing answered yet, so there
+	// is a Skip worth offering.
+	const skippable = !required && !answered;
 
 	const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		// Only this screen's fields, and only the ones it actually asked: a
-		// hidden target weight must never be written, and an answer from an
-		// earlier screen must survive untouched.
-		save.mutate(
-			Object.fromEntries(
-				asked.map((field) => [
-					field.name,
-					submitted(field, values[field.name] ?? null),
-				]),
-			) as ProfileInput,
-		);
+		if (!field) return;
+		// One field, so one key: everything the flow never asked about on this
+		// screen has to survive untouched, which is what `update` taking a
+		// partial is for.
+		save.mutate({
+			[field.name]: submitted(field, values[field.name] ?? null),
+		} as ProfileInput);
 	};
 
 	return (
@@ -212,7 +219,7 @@ export function OnboardingFlow({
 		// questions move, which is what stops a long list dragging the brand off
 		// the top of the page.
 		<div className="grid h-svh overflow-hidden bg-background lg:grid-cols-[minmax(20rem,26%)_minmax(0,1fr)]">
-			<BrandPanel index={index} />
+			<BrandPanel atPlan={index >= plan} step={step} />
 
 			<div className="flex min-h-0 flex-col overflow-y-auto">
 				{/* One padded column, capped and centred: full width is right for
@@ -233,17 +240,16 @@ export function OnboardingFlow({
 							/>
 							Set up your profile
 						</p>
-						{screen && (
+						{question && (
 							<p className={cn(MICRO, "text-muted-foreground tabular-nums")}>
-								{pad(index + 1)} <span aria-hidden="true">/</span>{" "}
-								{pad(ONBOARDING_SCREENS.length)}
+								{pad(index + 1)} <span aria-hidden="true">/</span> {pad(plan)}
 							</p>
 						)}
 					</div>
 
-					{screen && (
+					{question && (
 						<div className="mt-6 lg:mt-0">
-							<StepBar current={index} />
+							<StepBar current={question.step} />
 						</div>
 					)}
 
@@ -256,38 +262,36 @@ export function OnboardingFlow({
 							forwards ? "slide-in-from-end-4" : "slide-in-from-start-4",
 						)}
 						key={index}
-						ref={screenRef}
+						ref={focusScreen}
 					>
 						{index === WELCOME && <Welcome onStart={advance} />}
 
-						{screen && (
+						{field && (
 							<form className="flex flex-1 flex-col" onSubmit={onSubmit}>
 								<p className={cn(MICRO, "text-muted-foreground")}>
 									{pad(index + 1)} <span aria-hidden="true">/</span>{" "}
-									{screen.title}
+									{step?.title}
 								</p>
+								{/* The question is the heading. `QuestionField` still
+								    renders its label, hidden, so the control keeps a name
+								    of its own rather than borrowing this one. */}
 								<h1
 									className="mt-4 text-balance font-semibold text-3xl leading-[1.05] tracking-[-0.03em] outline-none sm:text-4xl"
 									tabIndex={-1}
 								>
-									{screen.heading}
+									{field.question ?? field.label}
 								</h1>
-								<p className="mt-3 max-w-xl text-pretty text-muted-foreground text-sm leading-relaxed">
-									{screen.blurb}
-								</p>
 
-								<div className="mt-8 grid max-w-xl gap-7">
-									{screen.fields.map((field) => (
-										<QuestionField
-											availability={availability}
-											context={values}
-											field={field}
-											key={field.name}
-											onChange={setAnswer}
-											system={system}
-											value={values[field.name] ?? null}
-										/>
-									))}
+								<div className="mt-8 max-w-xl">
+									<QuestionField
+										availability={availability}
+										context={values}
+										field={field}
+										hideLabel
+										onChange={setAnswer}
+										system={system}
+										value={values[field.name] ?? null}
+									/>
 								</div>
 
 								{/* Pinned at every width now that the column scrolls inside
@@ -328,7 +332,7 @@ export function OnboardingFlow({
 							</form>
 						)}
 
-						{index === PLAN && (
+						{index >= plan && (
 							<PlanSummary
 								// One round trip: the target the user just approved and the
 								// flag that stops the app redirecting back here.
@@ -436,24 +440,26 @@ function Welcome({ onStart }: { onStart: () => void }) {
  * so the panel stays the high-contrast one in either theme instead of turning
  * into a second dark surface on a dark page.
  */
-function BrandPanel({ index }: { index: number }) {
-	const screen = ONBOARDING_SCREENS[index];
-	const copy =
-		index === WELCOME
+function BrandPanel({
+	step,
+	atPlan,
+}: {
+	/** The chapter the current question belongs to, absent off the questions. */
+	step: OnboardingStep | undefined;
+	atPlan: boolean;
+}) {
+	const copy = step
+		? { headline: step.title, blurb: step.aside }
+		: atPlan
 			? {
+					headline: "Done",
+					blurb:
+						"These targets are a starting point. Mezo adjusts them as it learns what you actually do.",
+				}
+			: {
 					headline: "Onboarding",
 					blurb: "Everything here is editable later.",
-				}
-			: index === PLAN
-				? {
-						headline: "Done",
-						blurb:
-							"These targets are a starting point. Mezo adjusts them as it learns what you actually do.",
-					}
-				: {
-						headline: screen?.title ?? "",
-						blurb: screen?.aside ?? "",
-					};
+				};
 
 	return (
 		<aside className="relative hidden overflow-hidden bg-foreground p-10 text-background lg:flex lg:flex-col xl:p-12">
@@ -482,10 +488,12 @@ function BrandPanel({ index }: { index: number }) {
 			{/* `mb-2` because the footer line that used to sit under this is gone,
 			    and `mt-auto` alone leaves the last line flush with the padding. */}
 			<div className="relative mt-auto mb-2">
-				{screen && (
-					<p className={cn(MICRO, "mb-5 text-background/50 tabular-nums")}>
-						Step {pad(index + 1)} <span aria-hidden="true">/</span>{" "}
-						{pad(ONBOARDING_SCREENS.length)}
+				{step && (
+					<p className={cn(MICRO, "mb-5 text-background/50")}>
+						{/* The chapter, not the question: a "Step 07 / 13" beside a
+						    one-question screen reads as a queue to get through. */}
+						Step {ONBOARDING_STEPS.indexOf(step) + 1} of{" "}
+						{ONBOARDING_STEPS.length}
 					</p>
 				)}
 				<p className="text-balance font-semibold text-5xl leading-[1.05] tracking-[-0.03em]">
@@ -499,14 +507,18 @@ function BrandPanel({ index }: { index: number }) {
 	);
 }
 
-/** One node per screen, so progress reads as shape rather than as a count. */
+/**
+ * One node per chapter rather than per screen. Thirteen dots is a queue; four
+ * named ones is a shape, and the count of questions inside each is the flow's
+ * business rather than the reader's.
+ */
 function StepBar({ current }: { current: number }) {
 	return (
 		<ol className="flex items-center gap-2 sm:gap-3">
-			{ONBOARDING_SCREENS.map((screen, position) => {
+			{ONBOARDING_STEPS.map((screen, position) => {
 				const done = position < current;
 				const active = position === current;
-				const lastNode = position === ONBOARDING_SCREENS.length - 1;
+				const lastNode = position === ONBOARDING_STEPS.length - 1;
 				return (
 					<li
 						aria-current={active ? "step" : undefined}
