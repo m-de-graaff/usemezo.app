@@ -432,9 +432,8 @@ function BrandPanel({ index }: { index: number }) {
 	const copy =
 		index === WELCOME
 			? {
-					headline: "Set up",
-					blurb:
-						"Everything here is editable later, and none of it is shared unless you say so.",
+					headline: "Onboarding",
+					blurb: "Everything here is editable later.",
 				}
 			: index === PLAN
 				? {
@@ -471,7 +470,9 @@ function BrandPanel({ index }: { index: number }) {
 				<span className="font-semibold tracking-tight">mezo</span>
 			</div>
 
-			<div className="relative mt-auto">
+			{/* `mb-2` because the footer line that used to sit under this is gone,
+			    and `mt-auto` alone leaves the last line flush with the padding. */}
+			<div className="relative mt-auto mb-2">
 				{screen && (
 					<p className={cn(MICRO, "mb-5 text-background/50 tabular-nums")}>
 						Step {pad(index + 1)} <span aria-hidden="true">/</span>{" "}
@@ -483,16 +484,6 @@ function BrandPanel({ index }: { index: number }) {
 				</p>
 				<p className="mt-5 max-w-[26ch] text-pretty text-background/70 text-sm leading-relaxed">
 					{copy.blurb}
-				</p>
-			</div>
-
-			<div className="relative mt-12 border-background/15 border-t pt-5">
-				<p className={cn(MICRO, "flex items-center gap-2 text-background/50")}>
-					<span
-						aria-hidden="true"
-						className="size-1 rounded-full bg-background/50"
-					/>
-					Answer once, change any time
 				</p>
 			</div>
 		</aside>
