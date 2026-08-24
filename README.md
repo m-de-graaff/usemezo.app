@@ -2,6 +2,9 @@
 
 A Turborepo monorepo, laid out the way [create-t3-turbo](https://github.com/t3-oss/create-t3-turbo) does it.
 
+Next.js 16 (Turbopack), React 19.2, TypeScript 7, Tailwind 4, Drizzle, tRPC 11,
+Better Auth, and Biome.
+
 ```
 apps/
   nextjs/          Next.js 15 web app (App Router) — the only app so far
@@ -34,6 +37,10 @@ The app runs on http://localhost:3050.
 There is one `.env`, at the repository root. Next only reads `.env` from its own
 directory, so `apps/nextjs/next.config.js` loads the root file explicitly before
 anything touches `process.env`; `packages/db/drizzle.config.ts` does the same.
+
+Routing lives in `apps/nextjs/src/proxy.ts` — Next 16's replacement for
+`middleware.ts`. It runs on the Node runtime, which `proxy` does not let you
+configure.
 Add new variables to the schema in `packages/env/src/index.ts` or they will not
 be readable.
 

@@ -18,7 +18,8 @@
 		"moduleResolution": "Bundler",
 		"jsx": "preserve",
 		"incremental": true,
-		"allowImportingTsExtensions": true
+		"allowImportingTsExtensions": true,
+		"types": ["node"]
 	},
 	"exclude": ["node_modules", "build", "dist", ".next", ".turbo"]
 }

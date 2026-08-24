@@ -2,8 +2,8 @@ import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
 
 /**
- * Edge-safe route guard. Only checks that a session cookie is *present* — it
- * never validates it, because that needs the database. Treat this as a
+ * Next 16 runs this on the Node runtime — `proxy` has no edge option. It only checks that a session
+ * cookie is *present*, never that it is valid, because that needs the database. Treat this as a
  * redirect optimisation; every protected page/procedure still calls
  * `getSession()` and is the real authority.
  */

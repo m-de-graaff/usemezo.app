@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "next build",
-		"dev": "next dev --turbo --port 3050",
+		"dev": "next dev --port 3050",
 		"start": "next start",
 		"typecheck": "tsc --noEmit",
 		"test": "node --test \"src/**/*.test.ts\""
@@ -16,26 +16,29 @@
 		"@mezo/db": "workspace:*",
 		"@mezo/env": "workspace:*",
 		"@mezo/ui": "workspace:*",
-		"@tanstack/react-query": "^5.69.0",
-		"@trpc/client": "^11.0.0",
-		"@trpc/react-query": "^11.0.0",
-		"@trpc/server": "^11.0.0",
-		"better-auth": "^1.3",
-		"next": "^15.2.3",
-		"react": "^19.0.0",
-		"react-dom": "^19.0.0",
+		"@tanstack/react-query": "^5.102.1",
+		"@trpc/client": "^11.18.0",
+		"@trpc/react-query": "^11.18.0",
+		"@trpc/server": "^11.18.0",
+		"better-auth": "^1.7.1",
+		"next": "16.3.2",
+		"react": "19.2.8",
+		"react-dom": "19.2.8",
 		"server-only": "^0.0.1",
-		"superjson": "^2.2.1",
-		"zod": "^3.24.2"
+		"superjson": "^2.2.6",
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
-		"@tailwindcss/postcss": "^4.0.15",
-		"@types/node": "^20.14.10",
-		"@types/react": "^19.0.0",
-		"@types/react-dom": "^19.0.0",
-		"postcss": "^8.5.3",
+		"@tailwindcss/postcss": "^4.3.3",
+		"@types/node": "^26.2.0",
+		"@types/react": "19.2.18",
+		"@types/react-dom": "19.2.5",
+		"postcss": "^8.5.26",
 		"prettier": "^3.9.6",
-		"tailwindcss": "^4.0.15",
-		"typescript": "^5.8.2"
+		"tailwindcss": "^4.3.3",
+		"typescript": "^7.0.2"
+	},
+	"engines": {
+		"node": ">=20.9.0"
 	}
 }

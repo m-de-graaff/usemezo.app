@@ -24,6 +24,9 @@ build/
 # turborepo
 .turbo/
 
+# next.js profiling
+.next-profiles/
+
 # misc
 .DS_Store
 *.pem

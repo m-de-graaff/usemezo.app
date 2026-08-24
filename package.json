@@ -19,9 +19,9 @@
 		"db:studio": "pnpm -F @mezo/db studio"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.2.5",
-		"turbo": "^2.5.4",
-		"typescript": "^5.8.2",
-		"@types/node": "^20.14.10"
+		"@biomejs/biome": "^2.5.10",
+		"@types/node": "^26.2.0",
+		"turbo": "^2.10.11",
+		"typescript": "^7.0.2"
 	}
 }
