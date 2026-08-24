@@ -48,7 +48,19 @@ const MICRO =
  * it. Change one, change both.
  */
 const ACTION_BAR =
-	"sticky bottom-0 z-10 -mx-5 mt-auto border-border/60 border-t bg-background px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12";
+	"sticky bottom-0 z-10 -mx-5 border-border/60 border-t bg-background px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12";
+
+/**
+ * The body of a screen, between the progress bar and the action bar. Takes the
+ * space those two leave and centres itself in it, so a one-line question sits
+ * in the middle of the column rather than clinging to the top of a mostly empty
+ * one.
+ *
+ * `flex-1` rather than an auto margin: a flex item keeps `min-height: auto`, so
+ * a screen taller than the column still grows and scrolls instead of having its
+ * top centred out of reach.
+ */
+const SCREEN_BODY = "flex flex-1 flex-col justify-center py-8";
 
 /** Before the first question. */
 const WELCOME = -1;
@@ -258,7 +270,7 @@ export function OnboardingFlow({
 					    transition between states. */}
 					<div
 						className={cn(
-							"fade-in mt-8 flex flex-1 animate-in flex-col duration-300 ease-out-quint motion-reduce:animate-none",
+							"fade-in flex flex-1 animate-in flex-col duration-300 ease-out-quint motion-reduce:animate-none",
 							forwards ? "slide-in-from-end-4" : "slide-in-from-start-4",
 						)}
 						key={index}
@@ -268,30 +280,32 @@ export function OnboardingFlow({
 
 						{field && (
 							<form className="flex flex-1 flex-col" onSubmit={onSubmit}>
-								<p className={cn(MICRO, "text-muted-foreground")}>
-									{pad(index + 1)} <span aria-hidden="true">/</span>{" "}
-									{step?.title}
-								</p>
-								{/* The question is the heading. `QuestionField` still
-								    renders its label, hidden, so the control keeps a name
-								    of its own rather than borrowing this one. */}
-								<h1
-									className="mt-4 text-balance font-semibold text-3xl leading-[1.05] tracking-[-0.03em] outline-none sm:text-4xl"
-									tabIndex={-1}
-								>
-									{field.question ?? field.label}
-								</h1>
+								<div className={SCREEN_BODY}>
+									<p className={cn(MICRO, "text-muted-foreground")}>
+										{pad(index + 1)} <span aria-hidden="true">/</span>{" "}
+										{step?.title}
+									</p>
+									{/* The question is the heading. `QuestionField` still
+									    renders its label, hidden, so the control keeps a name
+									    of its own rather than borrowing this one. */}
+									<h1
+										className="mt-4 text-balance font-semibold text-3xl leading-[1.05] tracking-[-0.03em] outline-none sm:text-4xl"
+										tabIndex={-1}
+									>
+										{field.question ?? field.label}
+									</h1>
 
-								<div className="mt-8 max-w-xl">
-									<QuestionField
-										availability={availability}
-										context={values}
-										field={field}
-										hideLabel
-										onChange={setAnswer}
-										system={system}
-										value={values[field.name] ?? null}
-									/>
+									<div className="mt-8 max-w-xl">
+										<QuestionField
+											availability={availability}
+											context={values}
+											field={field}
+											hideLabel
+											onChange={setAnswer}
+											system={system}
+											value={values[field.name] ?? null}
+										/>
+									</div>
 								</div>
 
 								{/* Pinned at every width now that the column scrolls inside
@@ -384,39 +398,41 @@ function Welcome({ onStart }: { onStart: () => void }) {
 
 	return (
 		<div className="flex flex-1 flex-col">
-			<p className={cn(MICRO, "text-muted-foreground")}>Welcome</p>
-			<h1
-				className="mt-4 text-balance font-semibold text-3xl leading-[1.05] tracking-[-0.03em] outline-none sm:text-4xl"
-				tabIndex={-1}
-			>
-				Let&rsquo;s set up your profile
-			</h1>
-			<p className="mt-3 max-w-xl text-pretty text-muted-foreground text-sm leading-relaxed">
-				Skip anything you would rather not answer. We will tell you what we
-				could not work out without it.
-			</p>
+			<div className={SCREEN_BODY}>
+				<p className={cn(MICRO, "text-muted-foreground")}>Welcome</p>
+				<h1
+					className="mt-4 text-balance font-semibold text-3xl leading-[1.05] tracking-[-0.03em] outline-none sm:text-4xl"
+					tabIndex={-1}
+				>
+					Let&rsquo;s set up your profile
+				</h1>
+				<p className="mt-3 max-w-xl text-pretty text-muted-foreground text-sm leading-relaxed">
+					Skip anything you would rather not answer. We will tell you what we
+					could not work out without it.
+				</p>
 
-			<ul className="mt-8 grid max-w-xl gap-3">
-				{gets.map((item) => (
-					<li
-						className="flex gap-4 rounded-2xl border border-border p-4"
-						key={item.title}
-					>
-						<span
-							aria-hidden="true"
-							className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground"
+				<ul className="mt-8 grid max-w-xl gap-3">
+					{gets.map((item) => (
+						<li
+							className="flex gap-4 rounded-2xl border border-border p-4"
+							key={item.title}
 						>
-							<item.icon className="size-4" />
-						</span>
-						<span className="grid gap-1">
-							<span className="font-medium text-sm">{item.title}</span>
-							<span className="text-pretty text-muted-foreground text-sm leading-relaxed">
-								{item.body}
+							<span
+								aria-hidden="true"
+								className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground"
+							>
+								<item.icon className="size-4" />
 							</span>
-						</span>
-					</li>
-				))}
-			</ul>
+							<span className="grid gap-1">
+								<span className="font-medium text-sm">{item.title}</span>
+								<span className="text-pretty text-muted-foreground text-sm leading-relaxed">
+									{item.body}
+								</span>
+							</span>
+						</li>
+					))}
+				</ul>
+			</div>
 
 			<div className={ACTION_BAR}>
 				<Button
