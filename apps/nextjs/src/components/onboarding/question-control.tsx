@@ -5,12 +5,19 @@ import { Input } from "@mezo/ui/input";
 import { Label } from "@mezo/ui/label";
 import { cn } from "@mezo/ui/lib/utils";
 import {
+	BotIcon,
 	CakeIcon,
+	ChartLineIcon,
 	CheckIcon,
 	CircleDashedIcon,
+	DumbbellIcon,
+	HeartPulseIcon,
 	MarsIcon,
+	MoonIcon,
 	NonBinaryIcon,
+	SaladIcon,
 	TransgenderIcon,
+	TrendingDownIcon,
 	VenusIcon,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
@@ -71,7 +78,7 @@ const OPTION = cn(
  */
 const OPTION_ROW = cn(
 	OPTION,
-	"relative flex min-h-14 items-center gap-3.5 rounded-xl border border-border bg-background px-3.5 py-3 text-left",
+	"relative flex min-h-14 items-center gap-3 rounded-2xl border border-border bg-muted/40 p-4 text-left",
 );
 
 /** The same choice, for options short enough to sit side by side. */
@@ -89,12 +96,9 @@ const OPTION_CARD = cn(
 /**
  * Questions whose answers have a symbol worth showing. Kept here rather than on
  * the field: `profile-fields` is the shared spec and has no business importing
- * an icon set, and a question with no entry simply renders as rows or chips.
- *
- * Having an entry is what opts a question into the card layout — one source of
- * truth, so an icon can never be added without the layout that shows it.
+ * an icon set, and a question with no entry simply renders as plain rows.
  */
-const CARD_ICONS: Record<string, Record<string, typeof MarsIcon>> = {
+const OPTION_ICONS: Record<string, Record<string, typeof MarsIcon>> = {
 	gender: {
 		female: VenusIcon,
 		male: MarsIcon,
@@ -102,7 +106,22 @@ const CARD_ICONS: Record<string, Record<string, typeof MarsIcon>> = {
 		other: TransgenderIcon,
 		"prefer-not-to-say": CircleDashedIcon,
 	},
+	goals: {
+		"improve-health": HeartPulseIcon,
+		"lose-weight": TrendingDownIcon,
+		"build-muscle": DumbbellIcon,
+		"track-metrics": ChartLineIcon,
+		"improve-sleep": MoonIcon,
+		"eat-better": SaladIcon,
+		"try-ai-assistant": BotIcon,
+	},
 };
+
+/**
+ * Which iconned questions read as a grid of cards rather than a list of rows.
+ * Cards suit a handful of one-word answers; anything longer needs a line.
+ */
+const CARD_FIELDS = new Set(["gender"]);
 
 /**
  * Options this short read as a row of chips; anything longer needs a line of
@@ -247,7 +266,8 @@ function ChoiceList({
 	}) {
 	const name = useId();
 	const options = Object.entries(field.options);
-	const icons = CARD_ICONS[field.name];
+	const icons = OPTION_ICONS[field.name];
+	const cards = Boolean(icons) && CARD_FIELDS.has(field.name);
 	const chips =
 		!icons && options.every(([, label]) => label.length <= CHIP_LIMIT);
 	const selected = multiple
@@ -272,13 +292,18 @@ function ChoiceList({
 			<div
 				className={cn(
 					"mt-2 gap-3",
-					icons
+					cards
 						? // Capped so five cards break three and two rather than four and
 							// one, which is what the width alone would give.
 							"mx-auto flex max-w-lg flex-wrap justify-center"
 						: chips
 							? "flex flex-wrap justify-center gap-2"
-							: "grid gap-2 text-left sm:grid-cols-2",
+							: icons
+								? // One column for a list read by its symbols: an icon row
+									// is wide, and two of them side by side turn a scan into
+									// a search.
+									"mx-auto grid max-w-md gap-2 text-left"
+								: "grid gap-2 text-left sm:grid-cols-2",
 				)}
 			>
 				{options.map(([option, label]) => {
@@ -286,7 +311,7 @@ function ChoiceList({
 					const Icon = icons?.[option];
 					return (
 						<label
-							className={Icon ? OPTION_CARD : chips ? OPTION_CHIP : OPTION_ROW}
+							className={cards ? OPTION_CARD : chips ? OPTION_CHIP : OPTION_ROW}
 							key={option}
 						>
 							<input
@@ -308,7 +333,7 @@ function ChoiceList({
 								type={multiple ? "checkbox" : "radio"}
 								value={option}
 							/>
-							{Icon ? (
+							{cards && Icon ? (
 								<>
 									<Icon
 										aria-hidden="true"
@@ -321,10 +346,30 @@ function ChoiceList({
 								</>
 							) : (
 								<>
-									<Marker multiple={multiple} on={isOn} />
-									<span className="flex-1 text-pretty font-medium text-sm">
+									{/* Icon leads, marker trails: the symbol is what the eye
+									    runs down the list, and the tick answers "is this one
+									    on", which belongs at the end of the row. */}
+									{Icon && (
+										<Icon
+											aria-hidden="true"
+											className={cn(
+												"size-6 shrink-0 transition-colors",
+												// Comes forward with the label rather than staying
+												// muted, so a chosen row reads as one thing.
+												isOn ? "text-foreground" : "text-muted-foreground",
+											)}
+											strokeWidth={1.75}
+										/>
+									)}
+									<span
+										className={cn(
+											"flex-1 text-pretty text-sm",
+											isOn ? "font-semibold" : "font-medium",
+										)}
+									>
 										{label}
 									</span>
+									<Marker multiple={multiple} on={isOn} />
 								</>
 							)}
 						</label>
