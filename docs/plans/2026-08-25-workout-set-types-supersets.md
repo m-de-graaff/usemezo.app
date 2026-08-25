@@ -731,3 +731,30 @@ In the dev server: build a routine with a superset and a warm-up set, start it, 
 
 - **Milo cannot propose warm-ups or supersets.** `apps/nextjs/src/lib/routine-proposal.ts` still emits plain working sets, which stay valid under the new schema. Extending its tool schema is a separate change and is deliberately not in this plan.
 - **Drop sets and RPE** exist in Hevy and are not here. `SET_TYPES` is the one place a third type would be added.
+
+---
+
+## Amendment, same day: supersets are built, not inferred
+
+Tasks 3 and 4 above shipped a superset as "join with the exercise above", and it
+was wrong to use. Membership was a guess about which neighbours the lifter meant,
+and there was no way to say "this one is a superset" before deciding what went in
+it. Replaced by:
+
+- The superset button makes **one** exercise a superset and changes nothing else.
+- A dashed tile under the group is where it gets filled: drag an exercise onto it,
+  or tap it and pick one from the catalogue.
+- The same drag reorders the list. Dropping above or below a card moves it there,
+  and where it lands decides membership: between two members it joins, clear of
+  the group it shared it leaves, and a superset of one being repositioned keeps
+  its frame.
+- `normaliseSupersets` no longer dissolves a group of one, since that is now the
+  starting state rather than a broken one.
+
+Dragging stays optional throughout (SC 2.5.7): the arrows reorder, and the tile's
+picker lists the exercises already in the routine as a move.
+
+Also added, not in the original plan: `restAfterSec` alongside `restSec`, edited
+by `rest-fields.tsx`. Rest between an exercise's sets and rest before the next
+exercise are different numbers, and one field for both would make you pick which
+to be wrong about.
