@@ -96,8 +96,8 @@ export function WorkoutHistoryList({
 										{formatVolume(workout.volumeKg, system)}
 									</span>
 									<span className="block text-muted-foreground text-xs">
-										{workout.setCount} sets ·{" "}
-										{formatDuration(workout.durationSec)}
+										{workout.setCount} {workout.setCount === 1 ? "set" : "sets"}{" "}
+										· {formatDuration(workout.durationSec)}
 									</span>
 								</span>
 							</Link>
