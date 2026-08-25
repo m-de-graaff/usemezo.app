@@ -2,14 +2,20 @@
 
 import { buildPlan } from "@mezo/api/plan";
 import { Button } from "@mezo/ui/button";
+import {
+	type ChartConfig,
+	ChartContainer,
+	ChartTooltip,
+	ChartTooltipContent,
+} from "@mezo/ui/chart";
 import { Input } from "@mezo/ui/input";
 import { Label } from "@mezo/ui/label";
 import { cn } from "@mezo/ui/lib/utils";
 import { ArrowRightIcon } from "lucide-react";
 import Link from "next/link";
 import { useId, useState } from "react";
+import { Cell, Pie, PieChart } from "recharts";
 import type { SettingsValues } from "~/components/settings/settings-form";
-import { displayMeasure, type UnitSystem } from "~/lib/measure";
 
 const MICRO =
 	"font-medium text-[0.6875rem] uppercase leading-none tracking-[0.16em]";
@@ -35,12 +41,10 @@ const BMI_BAND: Record<string, string> = {
  */
 export function PlanSummary({
 	values,
-	system,
 	pending,
 	onFinish,
 }: {
 	values: SettingsValues;
-	system: UnitSystem;
 	pending: boolean;
 	onFinish: (dailyCalories: number | null) => void;
 }) {
@@ -63,14 +67,7 @@ export function PlanSummary({
 			/>
 		);
 
-	return (
-		<Complete
-			onFinish={onFinish}
-			pending={pending}
-			plan={plan}
-			system={system}
-		/>
-	);
+	return <Complete onFinish={onFinish} pending={pending} plan={plan} />;
 }
 
 const asString = (value: unknown) =>
@@ -80,12 +77,10 @@ const asNumber = (value: unknown) =>
 
 function Complete({
 	plan,
-	system,
 	pending,
 	onFinish,
 }: {
 	plan: Extract<ReturnType<typeof buildPlan>, { ok: true }>;
-	system: UnitSystem;
 	pending: boolean;
 	onFinish: (dailyCalories: number | null) => void;
 }) {
@@ -96,8 +91,6 @@ function Complete({
 	const [calories, setCalories] = useState(String(plan.calories));
 	const parsed = Number.parseInt(calories, 10);
 	const valid = Number.isFinite(parsed) && parsed >= 500 && parsed <= 10000;
-
-	const pace = displayMeasure(plan.paceKgPerWeek, "mass", system);
 
 	return (
 		<div className="flex flex-1 flex-col">
@@ -112,22 +105,23 @@ function Complete({
 					Here is where to start
 				</h1>
 				<p className="mt-3 max-w-xl text-pretty text-muted-foreground text-sm leading-relaxed">
-					Worked out from your answers with the Mifflin-St Jeor equation. It is
-					an estimate to adjust from, not medical advice, and no substitute for
-					talking to a doctor.
+					Built from what you told us about your body, your week and what you
+					are aiming at. A starting point to adjust from, not medical advice.
 				</p>
 
 				<div className="mt-8 grid w-full gap-3">
 					{/* The number the whole flow was for, as an editable field rather
 				    than a readout with an edit affordance hidden behind it. */}
-					<div className="rounded-2xl border border-border bg-muted/40 p-5">
+					<div className="rounded-2xl border border-border bg-muted/40 p-6 text-center">
 						<Label className={cn(MICRO, "text-muted-foreground")} htmlFor={id}>
 							Daily calories
 						</Label>
-						<div className="mt-3 flex items-baseline gap-2">
+						{/* Centred as one unit: the field and its unit read as the number
+						    on the screen, not as a form control that happens to be big. */}
+						<div className="mt-4 flex items-baseline justify-center gap-2">
 							<Input
 								aria-describedby={`${id}-note`}
-								className="h-auto w-[5.5ch] border-0 bg-transparent p-0 font-semibold text-5xl tabular-nums tracking-[-0.03em] shadow-none focus-visible:ring-0 md:text-5xl"
+								className="h-auto w-[4.5ch] border-0 bg-transparent p-0 text-center font-semibold text-6xl tabular-nums tracking-[-0.04em] shadow-none [-moz-appearance:textfield] focus-visible:ring-0 md:text-6xl [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
 								id={id}
 								max={10000}
 								min={500}
@@ -136,12 +130,12 @@ function Complete({
 								type="number"
 								value={calories}
 							/>
-							<span className="font-medium text-lg text-muted-foreground">
+							<span className="font-medium text-muted-foreground text-xl">
 								kcal
 							</span>
 						</div>
 						<p
-							className="mt-2 text-muted-foreground text-xs"
+							className="mx-auto mt-3 max-w-sm text-muted-foreground text-xs"
 							id={`${id}-note`}
 							// The floor notice is a correction to the number above it, so it
 							// has to reach someone who is not looking at the number.
@@ -149,7 +143,7 @@ function Complete({
 						>
 							{plan.atFloor
 								? "Raised to a safe minimum. The deficit your goal implied was lower than anyone should eat for long."
-								: "Change it if you already know your number. Editable later in Settings."}
+								: "Our recommendation from your answers. Change it if you already know your number, and again in Settings whenever it changes."}
 						</p>
 						{!valid && (
 							<p className="mt-2 text-destructive text-xs" role="alert">
@@ -158,27 +152,16 @@ function Complete({
 						)}
 					</div>
 
-					<div className="grid gap-3 sm:grid-cols-3">
-						<Macro grams={plan.protein} label="Protein" />
-						<Macro grams={plan.carbs} label="Carbs" />
-						<Macro grams={plan.fat} label="Fat" />
+					<div className="grid gap-3 sm:grid-cols-2">
+						<Macros carbs={plan.carbs} fat={plan.fat} protein={plan.protein} />
+						<Energy bmr={plan.bmr} calories={plan.calories} tdee={plan.tdee} />
 					</div>
 
-					<dl className="grid gap-x-6 gap-y-3 rounded-2xl border border-border p-5 sm:grid-cols-3">
+					<BmiScale band={plan.bmiBand} value={plan.bmi} />
+
+					<dl className="flex flex-wrap justify-center gap-x-12 gap-y-4 rounded-2xl border border-border p-5 text-center">
 						<Stat label="Age" value={`${plan.age}`} />
-						{/* The band is spelled out beside the figure: a number alone means
-					    nothing to most people, and a colour alone means nothing to
-					    anyone who cannot see it. */}
-						<Stat
-							label="BMI"
-							value={`${plan.bmi} · ${BMI_BAND[plan.bmiBand]}`}
-						/>
 						<Stat label="Water" value={`${plan.waterMl / 1000} L`} />
-						<Stat label="Resting burn" value={`${plan.bmr} kcal`} />
-						<Stat label="Daily burn" value={`${plan.tdee} kcal`} />
-						{plan.paceKgPerWeek > 0 && (
-							<Stat label="Pace" value={`${pace.text} ${pace.unit} a week`} />
-						)}
 						{plan.weeksToTarget !== null && (
 							<Stat
 								label="To your target"
@@ -204,16 +187,295 @@ function Complete({
 	);
 }
 
-function Macro({ label, grams }: { label: string; grams: number }) {
+/** Four calories to a gram of protein or carbohydrate, nine to a gram of fat. */
+const KCAL_PER_GRAM = { carbs: 4, fat: 9, protein: 4 } as const;
+
+/**
+ * Three weights of the same ink rather than three hues. The chart palette is
+ * one fixed set of greys across both themes, so half of it disappears into
+ * whichever background it lands on; `foreground` is the colour that flips.
+ */
+const MACRO_CHART = {
+	protein: { label: "Protein", color: "var(--foreground)" },
+	carbs: {
+		label: "Carbs",
+		color: "color-mix(in oklab, var(--foreground) 55%, transparent)",
+	},
+	fat: {
+		label: "Fat",
+		color: "color-mix(in oklab, var(--foreground) 28%, transparent)",
+	},
+} satisfies ChartConfig;
+
+/**
+ * The split, as the share of the day's calories each macro is — which is the
+ * thing a ring can show and a row of three numbers cannot. The grams are still
+ * spelled out beside it, because grams are what anyone actually weighs out.
+ */
+function Macros({
+	protein,
+	carbs,
+	fat,
+}: {
+	protein: number;
+	carbs: number;
+	fat: number;
+}) {
+	const grams = { carbs, fat, protein };
+	const slices = (["protein", "carbs", "fat"] as const).map((key) => ({
+		key,
+		grams: grams[key],
+		kcal: grams[key] * KCAL_PER_GRAM[key],
+		label: MACRO_CHART[key].label,
+	}));
+	const total = slices.reduce((sum, slice) => sum + slice.kcal, 0);
+
 	return (
-		<div className="rounded-xl border border-border p-4">
-			<p className={cn(MICRO, "text-muted-foreground")}>{label}</p>
-			<p className="mt-2 font-semibold text-2xl tabular-nums tracking-[-0.02em]">
-				{grams}
-				<span className="ml-0.5 font-medium text-base text-muted-foreground">
-					g
-				</span>
+		<div className="rounded-2xl border border-border p-5 text-left">
+			<p className={cn(MICRO, "text-muted-foreground")}>Macro split</p>
+			<div className="mt-3 flex items-center gap-4">
+				<div className="shrink-0">
+					<ChartContainer
+						className="aspect-square h-28 w-28"
+						config={MACRO_CHART}
+					>
+						<PieChart>
+							<ChartTooltip content={<ChartTooltipContent hideLabel />} />
+							<Pie
+								data={slices}
+								dataKey="kcal"
+								innerRadius="62%"
+								nameKey="key"
+								outerRadius="100%"
+								paddingAngle={2}
+								strokeWidth={0}
+							>
+								{slices.map((slice) => (
+									<Cell fill={`var(--color-${slice.key})`} key={slice.key} />
+								))}
+							</Pie>
+						</PieChart>
+					</ChartContainer>
+				</div>
+
+				<dl className="min-w-0 flex-1 space-y-2">
+					{slices.map((slice) => (
+						<div className="flex items-center gap-2" key={slice.key}>
+							<span
+								aria-hidden="true"
+								className="size-2.5 shrink-0 rounded-[3px]"
+								style={{ background: MACRO_CHART[slice.key].color }}
+							/>
+							<dt className="flex-1 text-muted-foreground text-xs">
+								{slice.label}
+							</dt>
+							<dd className="font-medium text-sm tabular-nums">
+								{slice.grams} g
+								<span className="ml-1.5 text-muted-foreground text-xs">
+									{Math.round((slice.kcal / total) * 100)}%
+								</span>
+							</dd>
+						</div>
+					))}
+				</dl>
+			</div>
+		</div>
+	);
+}
+
+/**
+ * Where the day's burn comes from, and what the plan feeds against it. The two
+ * bars share one scale, so the difference between them is the deficit or the
+ * surplus — the one thing on this screen that decides which way weight moves.
+ */
+function Energy({
+	bmr,
+	tdee,
+	calories,
+}: {
+	bmr: number;
+	tdee: number;
+	calories: number;
+}) {
+	const top = Math.max(tdee, calories);
+	const gap = calories - tdee;
+	const parts = [
+		{ key: "resting", label: "Resting", value: bmr },
+		{ key: "moving", label: "Moving", value: Math.max(0, tdee - bmr) },
+	];
+
+	return (
+		<div className="rounded-2xl border border-border p-5 text-left">
+			<p className={cn(MICRO, "text-muted-foreground")}>Energy</p>
+
+			<dl className="mt-4 space-y-4">
+				<div>
+					<div className="flex items-baseline justify-between gap-2">
+						<dt className="text-xs">You burn</dt>
+						<dd className="font-medium text-sm tabular-nums">
+							{tdee.toLocaleString("en-GB")} kcal
+						</dd>
+					</div>
+					{/* Split where it comes from: staying alive is most of it, which is
+					    the part nobody expects. */}
+					<div
+						aria-hidden="true"
+						className="mt-1.5 flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-muted"
+						style={{ width: `${(tdee / top) * 100}%` }}
+					>
+						{parts.map((part) => (
+							<span
+								className={cn(
+									"h-full",
+									part.key === "resting"
+										? "bg-foreground/70"
+										: "bg-foreground/30",
+								)}
+								key={part.key}
+								style={{ width: `${(part.value / tdee) * 100}%` }}
+							/>
+						))}
+					</div>
+					<p className="mt-1.5 flex gap-3 text-[0.625rem] text-muted-foreground">
+						{parts.map((part) => (
+							<span className="flex items-center gap-1" key={part.key}>
+								<span
+									aria-hidden="true"
+									className={cn(
+										"size-2 rounded-[3px]",
+										part.key === "resting"
+											? "bg-foreground/70"
+											: "bg-foreground/30",
+									)}
+								/>
+								{part.label} {part.value.toLocaleString("en-GB")}
+							</span>
+						))}
+					</p>
+				</div>
+
+				<div>
+					<div className="flex items-baseline justify-between gap-2">
+						<dt className="text-xs">You eat</dt>
+						<dd className="font-medium text-sm tabular-nums">
+							{calories.toLocaleString("en-GB")} kcal
+						</dd>
+					</div>
+					<div
+						aria-hidden="true"
+						className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted"
+					>
+						<div
+							className="h-full rounded-full bg-foreground"
+							style={{ width: `${(calories / top) * 100}%` }}
+						/>
+					</div>
+				</div>
+			</dl>
+
+			<p className="mt-4 text-pretty text-muted-foreground text-xs">
+				{gap === 0
+					? "Level with what you burn, which holds your weight where it is."
+					: `${Math.abs(gap).toLocaleString("en-GB")} kcal ${gap < 0 ? "less than you burn, so weight comes off" : "more than you burn, so weight goes on"}.`}
 			</p>
+		</div>
+	);
+}
+
+/** Where each band starts, and how wide the scale is drawn. */
+const BMI_MIN = 15;
+const BMI_MAX = 40;
+const BMI_BANDS = [
+	{ key: "underweight", short: "Under", to: 18.5 },
+	{ key: "healthy", short: "Healthy", to: 25 },
+	{ key: "overweight", short: "Over", to: 30 },
+	{ key: "obese", short: "Obese", to: BMI_MAX },
+] as const;
+
+/**
+ * BMI on the scale it means anything on. A number on its own says nothing about
+ * how far into a band it sits, or how close it is to leaving one — and the
+ * distance to the next band is the only actionable thing about it.
+ */
+function BmiScale({ value, band }: { value: number; band: string }) {
+	const span = BMI_MAX - BMI_MIN;
+	const at = Math.min(Math.max(((value - BMI_MIN) / span) * 100, 0), 100);
+	const healthy = BMI_BANDS[1];
+
+	// How far from the healthy range, in BMI points, which is what someone can
+	// actually do something about.
+	const away =
+		value < 18.5
+			? `${(18.5 - value).toFixed(1)} under the healthy range`
+			: value > 25
+				? `${(value - 25).toFixed(1)} over the healthy range`
+				: `${(25 - value).toFixed(1)} from the top of the range`;
+
+	return (
+		<div className="rounded-2xl border border-border p-5 text-left">
+			<div className="flex items-baseline justify-between gap-3">
+				<p className={cn(MICRO, "text-muted-foreground")}>Body mass index</p>
+				{/* The band is spelled out beside the figure: a number alone means
+				    nothing to most people, and a position alone means nothing to
+				    anyone who cannot see it. */}
+				<p className="text-muted-foreground text-xs">{away}</p>
+			</div>
+
+			<div className="relative mt-8">
+				{/* The reading rides the marker, so the number and the place it sits
+				    are one thing rather than two. */}
+				<span
+					className="absolute -top-7 -translate-x-1/2 whitespace-nowrap rounded-full bg-foreground px-2.5 py-1 font-semibold text-background text-xs tabular-nums"
+					style={{ left: `${at}%` }}
+				>
+					{value} · {BMI_BAND[band]}
+				</span>
+				<span
+					aria-hidden="true"
+					className="absolute -top-1 h-5 w-0.5 -translate-x-1/2 rounded-full bg-foreground"
+					style={{ left: `${at}%` }}
+				/>
+
+				<div aria-hidden="true" className="flex h-3 gap-0.5">
+					{BMI_BANDS.map((item, index) => {
+						const from =
+							index === 0 ? BMI_MIN : (BMI_BANDS[index - 1]?.to ?? 0);
+						return (
+							<span
+								className={cn(
+									"h-full first:rounded-l-full last:rounded-r-full",
+									item.key === healthy.key ? "bg-foreground/45" : "bg-muted",
+								)}
+								key={item.key}
+								style={{ width: `${((item.to - from) / span) * 100}%` }}
+							/>
+						);
+					})}
+				</div>
+
+				{/* Named bands, not bare numbers: 18.5 means nothing without the word
+				    beside it, and the word is what the scale is read by. */}
+				<div aria-hidden="true" className="mt-2 flex gap-0.5">
+					{BMI_BANDS.map((item, index) => {
+						const from =
+							index === 0 ? BMI_MIN : (BMI_BANDS[index - 1]?.to ?? 0);
+						return (
+							<span
+								className={cn(
+									"text-[0.625rem] leading-tight",
+									item.key === band
+										? "font-medium text-foreground"
+										: "text-muted-foreground",
+								)}
+								key={item.key}
+								style={{ width: `${((item.to - from) / span) * 100}%` }}
+							>
+								{item.short}
+							</span>
+						);
+					})}
+				</div>
+			</div>
 		</div>
 	);
 }

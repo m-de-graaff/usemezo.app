@@ -335,14 +335,33 @@ export const userProfile = pgTable(
 		/** Daily movement outside training. The TDEE multiplier keys off this. */
 		activityLevel: text("activity_level"),
 
+		/**
+		 * Body composition, as a smart scale or a DEXA reports it. All optional
+		 * and all stored metric, the same rule as `weightKg`: the unit preference
+		 * only decides what is shown.
+		 */
+		bodyFatPercent: real("body_fat_percent"),
+		bodyFatMassKg: real("body_fat_mass_kg"),
+		skeletalMuscleMassKg: real("skeletal_muscle_mass_kg"),
+		totalBodyWaterKg: real("total_body_water_kg"),
+		boneMassKg: real("bone_mass_kg"),
+		proteinMassKg: real("protein_mass_kg"),
+		/** The scale's own 1-59 index, not a mass. */
+		visceralFatLevel: integer("visceral_fat_level"),
+		/** What the device measured, which beats anything Mezo would estimate. */
+		basalMetabolicRateKcal: integer("basal_metabolic_rate_kcal"),
+		waistCm: real("waist_cm"),
+
 		// Nutrition
 		eatingHabits: text("eating_habits"),
 		dailyCalories: integer("daily_calories"),
 
 		// Health
-		medications: text("medications"),
-		supplements: text("supplements"),
-		physicalLimitations: text("physical_limitations"),
+		// Picked from a list rather than typed, so these are arrays of slugs the
+		// same way `goals` is.
+		medications: text("medications").array(),
+		supplements: text("supplements").array(),
+		physicalLimitations: text("physical_limitations").array(),
 		checkupFrequency: text("checkup_frequency"),
 
 		updatedAt: timestamp("updated_at")

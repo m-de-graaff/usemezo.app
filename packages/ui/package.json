@@ -11,6 +11,7 @@
 		"./button": "./src/button.tsx",
 		"./card": "./src/card.tsx",
 		"./chart": "./src/chart.tsx",
+		"./combobox": "./src/combobox.tsx",
 		"./dropdown-menu": "./src/dropdown-menu.tsx",
 		"./hooks/use-mobile": "./src/hooks/use-mobile.ts",
 		"./input": "./src/input.tsx",
