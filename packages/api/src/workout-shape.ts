@@ -19,10 +19,26 @@ const WEIGHT_MAX_KG = 1000;
 const SETS_MAX = 30;
 const EXERCISES_MAX = 50;
 
+/**
+ * What a set is, when it is not a working set.
+ *
+ * Mutually exclusive rather than two flags: a warm-up carried to failure is not
+ * a thing anyone logs, and one field is one control on screen instead of two.
+ */
+export const SET_TYPES = ["warmup", "failure"] as const;
+export type SetType = (typeof SET_TYPES)[number];
+
 const plannedSet = z.object({
-	reps: z.number().int().min(0).max(REPS_MAX),
-	/** Kilograms, always. 0 is a bodyweight set, not a missing answer. */
-	weightKg: z.number().min(0).max(WEIGHT_MAX_KG),
+	/**
+	 * Absent until somebody types one. A blank box is not the same claim as zero
+	 * reps, and filling it in for them is how an app ends up storing lifts that
+	 * were never planned and never done.
+	 */
+	reps: z.number().int().min(0).max(REPS_MAX).optional(),
+	/** Kilograms, always. 0 is a bodyweight set; absent is an unanswered one. */
+	weightKg: z.number().min(0).max(WEIGHT_MAX_KG).optional(),
+	/** Absent is a working set, which is almost all of them. */
+	type: z.enum(SET_TYPES).optional(),
 });
 
 const entry = {
@@ -36,11 +52,20 @@ const entry = {
 	note: z.string().max(500).optional(),
 	/** Seconds. Absent means the routine has no opinion and no timer starts. */
 	restSec: z.number().int().min(0).max(3600).optional(),
+	/**
+	 * Shared by consecutive entries trained back to back. Held per entry rather
+	 * than as a list of groups, so a reorder cannot leave a group pointing at a
+	 * position that has moved. `normaliseSupersets` re-issues these after every
+	 * mutation, which is what keeps a group contiguous.
+	 */
+	supersetId: z.string().min(1).max(32).optional(),
 };
 
 export const routineExercise = z.object({
 	...entry,
-	sets: z.array(plannedSet).min(1).max(SETS_MAX),
+	// No minimum. An exercise you have just added has no sets yet, and inventing
+	// three of ten reps is the guess this whole shape exists to stop making.
+	sets: z.array(plannedSet).max(SETS_MAX),
 });
 
 export const routineExercises = z.array(routineExercise).max(EXERCISES_MAX);
@@ -49,7 +74,7 @@ const loggedSet = plannedSet.extend({ done: z.boolean() });
 
 export const workoutExercise = z.object({
 	...entry,
-	sets: z.array(loggedSet).min(1).max(SETS_MAX),
+	sets: z.array(loggedSet).max(SETS_MAX),
 });
 
 export const workoutExercises = z.array(workoutExercise).max(EXERCISES_MAX);
@@ -76,14 +101,21 @@ export const startFromRoutine = (
 		sets: exercise.sets.map((set) => ({ ...set, done: false })),
 	}));
 
-/** Total weight moved, done sets only, rounded to the kilogram. */
+/** A warm-up is training, not tonnage. It is logged and it counts for nothing. */
+export const isCounted = (set: { type?: SetType }) => set.type !== "warmup";
+
+/** Total weight moved, done working sets only, rounded to the kilogram. */
 export const volumeKg = (exercises: WorkoutExercise[]) =>
 	Math.round(
 		exercises.reduce(
 			(total, exercise) =>
 				total +
 				exercise.sets.reduce(
-					(sum, set) => sum + (set.done ? set.reps * set.weightKg : 0),
+					(sum, set) =>
+						sum +
+						(set.done && isCounted(set)
+							? (set.reps ?? 0) * (set.weightKg ?? 0)
+							: 0),
 					0,
 				),
 			0,
@@ -92,7 +124,8 @@ export const volumeKg = (exercises: WorkoutExercise[]) =>
 
 export const doneSetCount = (exercises: WorkoutExercise[]) =>
 	exercises.reduce(
-		(total, exercise) => total + exercise.sets.filter((set) => set.done).length,
+		(total, exercise) =>
+			total + exercise.sets.filter((set) => set.done && isCounted(set)).length,
 		0,
 	);
 
@@ -150,3 +183,46 @@ export const toRoutineExercises = (
 		...exercise,
 		sets: exercise.sets.map(({ done: _done, ...set }) => set),
 	}));
+
+type HasSuperset = { supersetId?: string };
+
+/**
+ * Consecutive entries that share a `supersetId`, in list order.
+ *
+ * Everything else comes back as a run of one, so a caller renders one loop
+ * rather than branching on whether an entry happens to be grouped.
+ */
+export function supersetRuns<T extends HasSuperset>(exercises: T[]) {
+	const runs: { id: string | undefined; entries: T[] }[] = [];
+	for (const exercise of exercises) {
+		const last = runs.at(-1);
+		if (last && exercise.supersetId && last.id === exercise.supersetId) {
+			last.entries.push(exercise);
+		} else {
+			runs.push({ id: exercise.supersetId, entries: [exercise] });
+		}
+	}
+	return runs;
+}
+
+/**
+ * Re-issue every `supersetId` from the runs actually on screen.
+ *
+ * Run after any reorder, removal or join. Two members separated by a third
+ * exercise are two groups that happen to share a stale id, and a member left on
+ * its own is not a superset at all. Deriving the ids from position rather than
+ * patching them per mutation makes every one of those the same case.
+ */
+export function normaliseSupersets<T extends HasSuperset>(exercises: T[]): T[] {
+	return supersetRuns(exercises).flatMap((run) => {
+		if (run.entries.length < 2 || !run.id) {
+			return run.entries.map((entry) =>
+				entry.supersetId === undefined
+					? entry
+					: { ...entry, supersetId: undefined },
+			);
+		}
+		const id = newKey();
+		return run.entries.map((entry) => ({ ...entry, supersetId: id }));
+	});
+}
