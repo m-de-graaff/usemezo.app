@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
 	boolean,
 	date,
@@ -410,13 +410,117 @@ export const miloThread = pgTable(
 	(t) => [index("milo_thread_user_updated_idx").on(t.userId, t.updatedAt)],
 );
 
+/**
+ * A saved routine: a name and an ordered list of exercises with their planned
+ * sets.
+ *
+ * The exercise list is one `jsonb` document for the same reason `milo_thread`
+ * keeps its messages that way. Nothing queries inside a routine: every screen
+ * that wants one wants all of it, and a row per set would mean taking the
+ * document apart and putting it back together for no reader at all. The shape
+ * is `routineExercises` in `@mezo/api/workout-shape`, which is also what
+ * validates a write.
+ */
+export const routine = pgTable(
+	"routine",
+	{
+		// Minted in the browser, so a new routine has a URL before it has a row.
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		note: text("note"),
+		/** Where it sits in the user's own list. Ties break on `createdAt`. */
+		position: integer("position").notNull().default(0),
+		exercises: jsonb("exercises").notNull().default([]),
+		createdAt: timestamp("created_at")
+			.$defaultFn(() => new Date())
+			.notNull(),
+		updatedAt: timestamp("updated_at")
+			.$defaultFn(() => new Date())
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	// The only query the list screen makes: this user's routines, in their order.
+	(t) => [index("routine_user_position_idx").on(t.userId, t.position)],
+);
+
+/**
+ * One training session, live or finished.
+ *
+ * There is no separate "active workout" concept: a live session is this row
+ * with `finishedAt` still null, which makes resuming after a closed tab or on
+ * another device an ordinary read rather than a recovery path. The partial
+ * unique index is what makes that safe, by making a second live session
+ * impossible rather than merely unexpected.
+ *
+ * `volumeKg`, `setCount` and `durationSec` are written once, when the session
+ * finishes. They are derivable from `exercises`, and derived they are, by
+ * `@mezo/api/workout-shape` at the moment of finishing. Storing the answers is
+ * what lets the history list and the dashboard read a hundred sessions without
+ * unpacking a hundred documents.
+ */
+export const workout = pgTable(
+	"workout",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		/**
+		 * Where the session came from, when it came from anywhere. `set null`
+		 * rather than `cascade`: deleting a routine must not delete the training
+		 * somebody did from it.
+		 */
+		routineId: text("routine_id").references(() => routine.id, {
+			onDelete: "set null",
+		}),
+		name: text("name").notNull(),
+		note: text("note"),
+		exercises: jsonb("exercises").notNull().default([]),
+		startedAt: timestamp("started_at")
+			.$defaultFn(() => new Date())
+			.notNull(),
+		/** Null while the session is live. Set once, on finish. */
+		finishedAt: timestamp("finished_at"),
+		volumeKg: real("volume_kg").notNull().default(0),
+		setCount: integer("set_count").notNull().default(0),
+		durationSec: integer("duration_sec").notNull().default(0),
+	},
+	(t) => [
+		// History, newest first, and every date-ranged read the dashboard makes.
+		index("workout_user_started_idx").on(t.userId, t.startedAt),
+		// One live session per user, as a fact about the data rather than a rule
+		// the router has to keep remembering to apply.
+		uniqueIndex("workout_one_live_per_user")
+			.on(t.userId)
+			.where(sql`finished_at IS NULL`),
+	],
+);
+
 export const userRelations = relations(user, ({ many, one }) => ({
 	account: many(account),
 	session: many(session),
 	miloThreads: many(miloThread),
+	routines: many(routine),
+	workouts: many(workout),
 	profile: one(userProfile, {
 		fields: [user.id],
 		references: [userProfile.userId],
+	}),
+}));
+
+export const routineRelations = relations(routine, ({ one, many }) => ({
+	user: one(user, { fields: [routine.userId], references: [user.id] }),
+	workouts: many(workout),
+}));
+
+export const workoutRelations = relations(workout, ({ one }) => ({
+	user: one(user, { fields: [workout.userId], references: [user.id] }),
+	routine: one(routine, {
+		fields: [workout.routineId],
+		references: [routine.id],
 	}),
 }));
 
