@@ -5,13 +5,37 @@ import { Input } from "@mezo/ui/input";
 import { Label } from "@mezo/ui/label";
 import { cn } from "@mezo/ui/lib/utils";
 import {
+	ArmchairIcon,
+	BeefIcon,
+	BikeIcon,
+	BotIcon,
 	CakeIcon,
+	CarrotIcon,
+	ChartLineIcon,
 	CheckIcon,
 	CircleDashedIcon,
+	CircleEllipsisIcon,
+	DumbbellIcon,
+	EggIcon,
+	FishIcon,
+	FlameIcon,
+	FootprintsIcon,
+	HeartPulseIcon,
 	MarsIcon,
+	MoonIcon,
+	MoonStarIcon,
+	MoveRightIcon,
 	NonBinaryIcon,
+	SaladIcon,
+	ScrollIcon,
+	SproutIcon,
 	TransgenderIcon,
+	TrendingDownIcon,
+	TrendingUpIcon,
+	UtensilsIcon,
 	VenusIcon,
+	WheatOffIcon,
+	ZapIcon,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type {
@@ -22,7 +46,14 @@ import {
 	type UsernameAvailability,
 	UsernameStatus,
 } from "~/components/username-availability";
-import { defaultFor, displayMeasure, type UnitSystem } from "~/lib/measure";
+import {
+	defaultFor,
+	displayMeasure,
+	formatFeetInches,
+	fromDisplay,
+	toDisplay,
+	type UnitSystem,
+} from "~/lib/measure";
 
 type Props = {
 	field: Field;
@@ -58,7 +89,7 @@ const OPTION = cn(
 	// visible at a glance rather than only on inspection. `foreground` at low
 	// alpha rather than a fixed colour: it lightens the card on a dark theme and
 	// darkens it on a light one, which is "raised" in both.
-	"has-checked:border-foreground has-checked:bg-foreground/[0.16] has-checked:shadow-sm has-checked:ring-1 has-checked:ring-foreground",
+	"has-checked:border-foreground/55 has-checked:bg-foreground/[0.16] has-checked:shadow-sm has-checked:ring-1 has-checked:ring-foreground/55",
 	// Named explicitly, because hovering a chosen option matches two rules and
 	// leaving the winner to stylesheet order is how a state ends up flickering.
 	"has-checked:hover:bg-foreground/[0.22]",
@@ -71,7 +102,7 @@ const OPTION = cn(
  */
 const OPTION_ROW = cn(
 	OPTION,
-	"relative flex min-h-14 items-center gap-3.5 rounded-xl border border-border bg-background px-3.5 py-3 text-left",
+	"relative flex min-h-14 items-center gap-3 rounded-2xl border border-border bg-muted/40 p-4 text-left",
 );
 
 /** The same choice, for options short enough to sit side by side. */
@@ -87,14 +118,21 @@ const OPTION_CARD = cn(
 );
 
 /**
+ * The same card once there are too many to sit centred on one line: a tile in a
+ * two-up grid, icon above a left-aligned label, so ten answers still scan as a
+ * grid rather than a centred paragraph of them.
+ */
+const OPTION_TILE = cn(
+	OPTION,
+	"relative flex min-h-24 flex-col items-start justify-between gap-2 rounded-3xl border border-border bg-muted/40 p-4 text-left",
+);
+
+/**
  * Questions whose answers have a symbol worth showing. Kept here rather than on
  * the field: `profile-fields` is the shared spec and has no business importing
- * an icon set, and a question with no entry simply renders as rows or chips.
- *
- * Having an entry is what opts a question into the card layout — one source of
- * truth, so an icon can never be added without the layout that shows it.
+ * an icon set, and a question with no entry simply renders as plain rows.
  */
-const CARD_ICONS: Record<string, Record<string, typeof MarsIcon>> = {
+const OPTION_ICONS: Record<string, Record<string, typeof MarsIcon>> = {
 	gender: {
 		female: VenusIcon,
 		male: MarsIcon,
@@ -102,7 +140,61 @@ const CARD_ICONS: Record<string, Record<string, typeof MarsIcon>> = {
 		other: TransgenderIcon,
 		"prefer-not-to-say": CircleDashedIcon,
 	},
+	goalDirection: {
+		lose: TrendingDownIcon,
+		maintain: MoveRightIcon,
+		gain: TrendingUpIcon,
+	},
+	eatingHabits: {
+		balanced: UtensilsIcon,
+		"high-protein": BeefIcon,
+		"low-carb": EggIcon,
+		vegetarian: CarrotIcon,
+		vegan: SproutIcon,
+		pescatarian: FishIcon,
+		halal: MoonStarIcon,
+		kosher: ScrollIcon,
+		"gluten-free": WheatOffIcon,
+		other: CircleEllipsisIcon,
+	},
+	activityLevel: {
+		sedentary: ArmchairIcon,
+		light: FootprintsIcon,
+		moderate: BikeIcon,
+		active: FlameIcon,
+		"very-active": ZapIcon,
+	},
+	goals: {
+		"improve-health": HeartPulseIcon,
+		"lose-weight": TrendingDownIcon,
+		"build-muscle": DumbbellIcon,
+		"track-metrics": ChartLineIcon,
+		"improve-sleep": MoonIcon,
+		"eat-better": SaladIcon,
+		"try-ai-assistant": BotIcon,
+	},
 };
+
+/**
+ * Which iconned questions read as a grid of cards rather than a list of rows.
+ * Cards suit a handful of one-word answers; anything longer needs a line.
+ */
+const CARD_FIELDS = new Set([
+	"gender",
+	"goalDirection",
+	"eatingHabits",
+	"goals",
+	"activityLevel",
+]);
+
+/**
+ * Above this many cards, centred and wrapped stops reading as rows and the grid
+ * of tiles takes over. A threshold rather than another set to keep in step — as
+ * is the other half of the rule: an answer that carries a line of explanation
+ * needs a tile whatever the count, since a centred word-per-card has nowhere to
+ * put it.
+ */
+const TILE_FROM = 6;
 
 /**
  * Options this short read as a row of chips; anything longer needs a line of
@@ -208,6 +300,19 @@ export function QuestionControl(
 	}
 }
 
+/**
+ * `"Lightly active (light exercise 1 to 3 days a week)"` -> a name and the line
+ * under it. The parenthetical in an option label is always an explanation, and
+ * a row has the space to show it as one rather than as a longer name.
+ */
+function splitLabel(label: string) {
+	const match = /^(.*?)\s*\((.*)\)$/.exec(label);
+	if (!match?.[1] || !match[2]) return { detail: undefined, title: label };
+	// Sentence case: it reads as its own line now, not as an aside.
+	const detail = match[2][0]?.toUpperCase() + match[2].slice(1);
+	return { detail, title: match[1] };
+}
+
 /** The tick or square beside a chosen option. Colour is never the only signal. */
 function Marker({ on, multiple }: { on: boolean; multiple: boolean }) {
 	return (
@@ -247,9 +352,18 @@ function ChoiceList({
 	}) {
 	const name = useId();
 	const options = Object.entries(field.options);
-	const icons = CARD_ICONS[field.name];
+	const icons = OPTION_ICONS[field.name];
+	const cards = Boolean(icons) && CARD_FIELDS.has(field.name);
+	const many = options.length > TILE_FROM;
+	// Ten tiles with a line of explanation each is the long list again, so the
+	// second line is a luxury of the shorter questions.
+	const details =
+		!many && options.some(([, label]) => splitLabel(label).detail);
+	const tiles = cards && (details || many);
 	const chips =
-		!icons && options.every(([, label]) => label.length <= CHIP_LIMIT);
+		!cards &&
+		!icons &&
+		options.every(([, label]) => label.length <= CHIP_LIMIT);
 	const selected = multiple
 		? Array.isArray(value)
 			? value
@@ -271,22 +385,45 @@ function ChoiceList({
 			{help}
 			<div
 				className={cn(
-					"mt-2 gap-3",
-					icons
-						? // Capped so five cards break three and two rather than four and
-							// one, which is what the width alone would give.
-							"mx-auto flex max-w-lg flex-wrap justify-center"
-						: chips
-							? "flex flex-wrap justify-center gap-2"
-							: "grid gap-2 text-left sm:grid-cols-2",
+					"mt-6 gap-3",
+					tiles
+						? cn(
+								"mx-auto grid gap-2",
+								// A tile with a second line needs a column it can breathe
+								// in; a one-word tile does not.
+								details
+									? "max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2"
+									: "max-w-lg grid-cols-2 sm:grid-cols-3",
+							)
+						: cards
+							? // Capped so five cards break three and two rather than four and
+								// one, which is what the width alone would give.
+								"mx-auto flex max-w-lg flex-wrap justify-center"
+							: chips
+								? "flex flex-wrap justify-center gap-2"
+								: icons
+									? // One column for a list read by its symbols: an icon row
+										// is wide, and two of them side by side turn a scan into
+										// a search.
+										"mx-auto grid max-w-md gap-2 text-left"
+									: "grid gap-2 text-left sm:grid-cols-2",
 				)}
 			>
 				{options.map(([option, label]) => {
 					const isOn = selected.includes(option);
 					const Icon = icons?.[option];
+					const { title, detail } = splitLabel(label);
 					return (
 						<label
-							className={Icon ? OPTION_CARD : chips ? OPTION_CHIP : OPTION_ROW}
+							className={
+								tiles
+									? OPTION_TILE
+									: cards
+										? OPTION_CARD
+										: chips
+											? OPTION_CHIP
+											: OPTION_ROW
+							}
 							key={option}
 						>
 							<input
@@ -308,23 +445,68 @@ function ChoiceList({
 								type={multiple ? "checkbox" : "radio"}
 								value={option}
 							/>
-							{Icon ? (
+							{cards && Icon ? (
 								<>
 									<Icon
 										aria-hidden="true"
-										className="size-8"
+										className={tiles ? "size-6" : "size-8"}
 										strokeWidth={1.5}
 									/>
-									<span className="text-pretty font-semibold text-sm leading-tight">
-										{label}
+									{/* A tile has no room for a row's trailing marker, so on a
+									    "pick as many as you like" question it sits in the
+									    corner: the tick is what says several are on. */}
+									{tiles && multiple && (
+										<span className="absolute top-3 right-3">
+											<Marker multiple on={isOn} />
+										</span>
+									)}
+									<span
+										className={cn(
+											"text-pretty font-semibold leading-tight",
+											tiles ? "w-full text-sm" : "text-sm",
+										)}
+									>
+										{title}
 									</span>
+									{details && detail && (
+										<span className="text-pretty text-muted-foreground text-xs leading-snug">
+											{detail}
+										</span>
+									)}
 								</>
 							) : (
 								<>
-									<Marker multiple={multiple} on={isOn} />
-									<span className="flex-1 text-pretty font-medium text-sm">
-										{label}
+									{/* Icon leads, marker trails: the symbol is what the eye
+									    runs down the list, and the tick answers "is this one
+									    on", which belongs at the end of the row. */}
+									{Icon && (
+										<Icon
+											aria-hidden="true"
+											className={cn(
+												"size-6 shrink-0 transition-colors",
+												// Comes forward with the label rather than staying
+												// muted, so a chosen row reads as one thing.
+												isOn ? "text-foreground" : "text-muted-foreground",
+											)}
+											strokeWidth={1.75}
+										/>
+									)}
+									<span className="flex flex-1 flex-col gap-0.5">
+										<span
+											className={cn(
+												"text-pretty text-sm",
+												isOn ? "font-semibold" : "font-medium",
+											)}
+										>
+											{title}
+										</span>
+										{detail && (
+											<span className="text-pretty text-muted-foreground text-xs">
+												{detail}
+											</span>
+										)}
 									</span>
+									<Marker multiple={multiple} on={isOn} />
 								</>
 							)}
 						</label>
@@ -391,6 +573,55 @@ function ToggleChoice({
 }
 
 /**
+ * kg or lb, cm or ft, above the number they label. The unit preference is not a
+ * question of its own: the only moment it matters is the moment a measurement
+ * is being read, and whatever is picked here is what gets saved.
+ */
+function UnitTabs({
+	measure,
+	system,
+	onChange,
+}: {
+	measure: NonNullable<Extract<Field, { type: "number" }>["measure"]>;
+	system: UnitSystem;
+	onChange: Props["onChange"];
+}) {
+	const name = useId();
+	const labels =
+		measure === "length"
+			? { metric: "cm", imperial: "ft" }
+			: { metric: "kg", imperial: "lb" };
+
+	return (
+		<fieldset className="mx-auto flex w-full max-w-56 rounded-2xl bg-muted p-1">
+			<legend className="sr-only">Units</legend>
+			{(["metric", "imperial"] as const).map((option) => (
+				<label
+					className={cn(
+						"flex-1 cursor-pointer select-none rounded-xl px-4 py-2 text-center font-semibold text-sm transition-colors",
+						"has-focus-visible:ring-3 has-focus-visible:ring-ring/50",
+						system === option
+							? "bg-background text-foreground shadow-sm"
+							: "text-muted-foreground hover:text-foreground",
+					)}
+					key={option}
+				>
+					<input
+						checked={system === option}
+						className="sr-only"
+						name={name}
+						onChange={() => onChange("units", option)}
+						type="radio"
+						value={option}
+					/>
+					{labels[option]}
+				</label>
+			))}
+		</fieldset>
+	);
+}
+
+/**
  * A readout over a slider. The number is the answer, so it is the thing that is
  * big; the slider under it is how the number is changed.
  *
@@ -416,33 +647,92 @@ function MeasureInput({
 	const min = field.sliderMin ?? field.min;
 	const max = field.sliderMax ?? field.max;
 	const clamped = Math.min(Math.max(current, min), max);
+
+	// A height is a number people know exactly, and a wheel lands on it exactly
+	// where a slider track a few hundred pixels wide has to be nudged into it.
+	// The wheel counts in whatever is being shown — centimetres or inches — so
+	// every stop on it is a height someone would actually say out loud.
+	if (measure === "length") {
+		const toShown = (value: number) =>
+			Math.round(toDisplay(value, measure, system));
+		const options = range(toShown(min), toShown(max));
+
+		return (
+			<div className="flex w-full flex-col gap-4">
+				<UnitTabs measure={measure} onChange={onChange} system={system} />
+				<WheelWindow row={BIG_ROW}>
+					<Wheel
+						emphasis
+						label={field.label}
+						onChange={(next) =>
+							onChange(field.name, fromDisplay(next, measure, system))
+						}
+						optionLabel={(next) =>
+							system === "imperial"
+								? formatFeetInches(fromDisplay(next, measure, system))
+								: `${next} cm`
+						}
+						options={options}
+						value={Math.min(
+							Math.max(toShown(current), options[0] ?? 0),
+							options[options.length - 1] ?? 0,
+						)}
+					/>
+				</WheelWindow>
+			</div>
+		);
+	}
+	// A weight is read off a scale to the pound or the half kilo, so it gets the
+	// ruler it is used to: the number stays put and the scale runs under it.
+	if (measure === "mass") {
+		const toShown = (value: number) =>
+			Math.round(toDisplay(value, measure, system));
+		const options = range(toShown(min), toShown(max));
+
+		return (
+			<div className="flex w-full min-w-0 flex-col gap-4">
+				<UnitTabs measure={measure} onChange={onChange} system={system} />
+				<Readout
+					big
+					context={context}
+					current={current}
+					field={field}
+					id={id}
+					shown={shown}
+					system={system}
+				/>
+				<Ruler
+					label={field.label}
+					onChange={(next) =>
+						onChange(field.name, fromDisplay(next, measure, system))
+					}
+					options={options}
+					value={Math.min(
+						Math.max(toShown(current), options[0] ?? 0),
+						options[options.length - 1] ?? 0,
+					)}
+				/>
+			</div>
+		);
+	}
+
 	// Drives the filled part of the WebKit track, which has no `::-moz-range-
 	// progress` equivalent and so has to be painted as a gradient.
 	const fill = `${((clamped - min) / (max - min)) * 100}%`;
 
 	return (
 		<div className="flex w-full flex-col gap-2">
-			<p className="flex items-baseline justify-center gap-1.5">
-				{/* Tabular figures: without them the readout changes width as it
-				    counts, and drags the unit beside it back and forth. */}
-				<output
-					className="font-semibold text-3xl tabular-nums tracking-[-0.03em]"
-					htmlFor={id}
-				>
-					{shown.text}
-				</output>
-				{shown.unit && (
-					<span className="font-medium text-base text-muted-foreground">
-						{shown.unit}
-					</span>
-				)}
-				<Remaining
-					context={context}
-					current={current}
-					field={field}
-					system={system}
-				/>
-			</p>
+			{measure && (
+				<UnitTabs measure={measure} onChange={onChange} system={system} />
+			)}
+			<Readout
+				context={context}
+				current={current}
+				field={field}
+				id={id}
+				shown={shown}
+				system={system}
+			/>
 
 			<div className="w-full">
 				<input
@@ -584,6 +874,12 @@ const MONTHS = [
 
 /** Row height in pixels. Doubles as the touch target, so it clears 44. */
 const ROW = 44;
+
+/** Space between two ruler ticks. Wide enough to land a finger between them. */
+const TICK = 12;
+
+/** The same row, on a screen whose only question is this one wheel. */
+const BIG_ROW = 64;
 /** Rows visible at once. Odd, so one of them is the middle. */
 const ROWS = 5;
 
@@ -652,53 +948,266 @@ function DateInput({
 			{/* `mx-auto`, not `self-center`: the parent is the `<fieldset>`, which is
 			    a block, so an alignment property would have nothing to align to. */}
 			<div className="mx-auto mt-2 flex w-full max-w-sm flex-col gap-3">
-				<div className="relative">
-					{/* One pill across all three wheels, marking the row they read
-					    from. Behind the numbers and untouchable, so a drag that
-					    starts on it still scrolls the wheel underneath. */}
-					<div
-						aria-hidden="true"
-						className="pointer-events-none absolute inset-x-0 top-1/2 z-0 -translate-y-1/2 rounded-xl border border-foreground bg-muted/60"
-						style={{ height: ROW }}
+				{/* One pill across all three wheels, marking the row they read from. */}
+				<WheelWindow>
+					<Wheel
+						label="Month"
+						onChange={(next) => commit(year, next, day)}
+						optionLabel={(index) => MONTHS[index] ?? ""}
+						options={range(0, 11)}
+						value={month}
 					/>
-					<div className="relative z-10 flex gap-2">
-						<Wheel
-							label="Month"
-							onChange={(next) => commit(year, next, day)}
-							optionLabel={(index) => MONTHS[index] ?? ""}
-							options={range(0, 11)}
-							value={month}
-						/>
-						<Wheel
-							label="Day"
-							onChange={(next) => commit(year, month, next)}
-							optionLabel={(next) => String(next).padStart(2, "0")}
-							options={range(1, daysInMonth(year, month))}
-							value={day}
-						/>
-						<Wheel
-							label="Year"
-							onChange={(next) => commit(next, month, day)}
-							optionLabel={String}
-							options={range(EARLIEST_BIRTH.getFullYear(), today.getFullYear())}
-							value={year}
-						/>
-					</div>
-					{/* Fades the rows running out of the top and bottom of the window,
-					    which is what reads as a wheel rather than a cropped list. */}
-					<div
-						aria-hidden="true"
-						className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-gradient-to-b from-background to-transparent"
+					<Wheel
+						label="Day"
+						onChange={(next) => commit(year, month, next)}
+						optionLabel={(next) => String(next).padStart(2, "0")}
+						options={range(1, daysInMonth(year, month))}
+						value={day}
 					/>
-					<div
-						aria-hidden="true"
-						className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-16 bg-gradient-to-t from-background to-transparent"
+					<Wheel
+						label="Year"
+						onChange={(next) => commit(next, month, day)}
+						optionLabel={String}
+						options={range(EARLIEST_BIRTH.getFullYear(), today.getFullYear())}
+						value={year}
 					/>
-				</div>
+				</WheelWindow>
 
 				<Age value={value} />
 			</div>
 		</fieldset>
+	);
+}
+
+/**
+ * The answer itself, over whatever is used to change it.
+ */
+function Readout({
+	shown,
+	field,
+	current,
+	context,
+	system,
+	id,
+	big = false,
+}: {
+	shown: { text: string; unit: string };
+	field: Extract<Field, { type: "number" }>;
+	current: number;
+	context: SettingsValues;
+	system: UnitSystem;
+	id?: string;
+	/** The readout is the screen, rather than a caption over a slider. */
+	big?: boolean;
+}) {
+	return (
+		<p className="flex items-baseline justify-center gap-1.5">
+			{/* Tabular figures: without them the readout changes width as it
+			    counts, and drags the unit beside it back and forth. */}
+			<output
+				className={cn(
+					"tabular-nums tracking-[-0.03em]",
+					big ? "font-bold text-6xl" : "font-semibold text-3xl",
+				)}
+				htmlFor={id}
+			>
+				{shown.text}
+			</output>
+			{shown.unit && (
+				<span
+					className={cn(
+						"font-medium text-muted-foreground",
+						big ? "text-2xl" : "text-base",
+					)}
+				>
+					{shown.unit}
+				</span>
+			)}
+			<Remaining
+				context={context}
+				current={current}
+				field={field}
+				system={system}
+			/>
+		</p>
+	);
+}
+
+/**
+ * A ruler, read against a fixed mark rather than dragged along a track: the
+ * scale moves under the answer, the way a weight is read off a scale. The same
+ * bones as `Wheel` turned on its side, snapping for the pointer and arrow keys
+ * for the keyboard, both writing through one `onChange`.
+ */
+function Ruler({
+	label,
+	options,
+	value,
+	onChange,
+}: {
+	label: string;
+	options: number[];
+	value: number;
+	onChange: (value: number) => void;
+}) {
+	const ref = useRef<HTMLDivElement>(null);
+	const index = Math.max(0, options.indexOf(value));
+	const drag = useRef<{ x: number; left: number } | null>(null);
+	const [dragging, setDragging] = useState(false);
+
+	// Keep the ruler under the mark when the value changes from outside — the
+	// unit switching, or the first render. Guarded so it never yanks the scale
+	// back while a finger is still on it.
+	useEffect(() => {
+		const element = ref.current;
+		if (!element) return;
+		const target = index * TICK;
+		if (Math.abs(element.scrollLeft - target) < TICK / 2) return;
+		element.scrollTo({ left: target });
+	}, [index]);
+
+	return (
+		// `min-w-0`: this sits in a flex column, where a min-width of auto would
+		// let the full length of the scale set the width of the screen instead of
+		// scrolling inside it.
+		<div className="relative w-full min-w-0 overflow-hidden">
+			<div
+				aria-label={label}
+				aria-valuemax={options[options.length - 1]}
+				aria-valuemin={options[0]}
+				aria-valuenow={value}
+				className={cn(
+					"touch-pan-x overflow-x-scroll outline-none [scrollbar-width:none] focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-scrollbar]:hidden",
+					// Snapping is suspended for the length of a drag, or the browser
+					// keeps yanking the scale to the nearest tick mid-gesture.
+					dragging ? "cursor-grabbing" : "cursor-grab snap-x snap-mandatory",
+				)}
+				onKeyDown={(event) => {
+					const by =
+						event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+					if (!by) return;
+					event.preventDefault();
+					const next =
+						options[Math.min(options.length - 1, Math.max(0, index + by))];
+					if (next !== undefined) onChange(next);
+				}}
+				onLostPointerCapture={() => {
+					drag.current = null;
+					setDragging(false);
+				}}
+				onPointerDown={(event) => {
+					// Touch already drags a scroll container, with momentum and
+					// rubber-banding this cannot match. Only a mouse needs the help.
+					if (event.pointerType !== "mouse") return;
+					event.currentTarget.setPointerCapture(event.pointerId);
+					drag.current = {
+						left: event.currentTarget.scrollLeft,
+						x: event.clientX,
+					};
+					setDragging(true);
+				}}
+				onPointerMove={(event) => {
+					const from = drag.current;
+					if (!from) return;
+					event.currentTarget.scrollLeft = from.left - (event.clientX - from.x);
+				}}
+				onPointerUp={(event) => {
+					const from = drag.current;
+					drag.current = null;
+					setDragging(false);
+					if (!from) return;
+					// Snapping was off through the drag, so nothing has landed on a
+					// tick yet. Turning it back on does not scroll, so put it there.
+					const target =
+						Math.round(event.currentTarget.scrollLeft / TICK) * TICK;
+					event.currentTarget.scrollTo({ behavior: "smooth", left: target });
+				}}
+				onScroll={(event) => {
+					const next =
+						options[Math.round(event.currentTarget.scrollLeft / TICK)];
+					if (next !== undefined && next !== value) onChange(next);
+				}}
+				ref={ref}
+				role="spinbutton"
+				// Half a window either side, so the first and last values can still
+				// reach the mark in the middle.
+				style={{ paddingInline: `calc(50% - ${TICK / 2}px)` }}
+				tabIndex={0}
+			>
+				<div className="flex items-end">
+					{options.map((option) => {
+						// Every fifth tick is taller and carries its number, which is
+						// what makes a run of lines readable as a scale.
+						const major = option % 5 === 0;
+						return (
+							<div
+								className="flex shrink-0 snap-center flex-col items-center gap-2"
+								key={option}
+								style={{ width: TICK }}
+							>
+								<span
+									className={cn(
+										"w-px rounded-full",
+										major ? "h-12 bg-foreground/45" : "h-7 bg-border",
+									)}
+								/>
+								<span className="h-4 text-[10px] text-muted-foreground tabular-nums">
+									{major ? option : ""}
+								</span>
+							</div>
+						);
+					})}
+				</div>
+			</div>
+
+			{/* The mark the scale is read against. Over the ticks and untouchable,
+			    so a drag that starts on it still moves the ruler underneath. */}
+			<div
+				aria-hidden="true"
+				className="pointer-events-none absolute top-0 bottom-6 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-primary"
+			/>
+			<div
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-background to-transparent"
+			/>
+			<div
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-background to-transparent"
+			/>
+		</div>
+	);
+}
+
+/**
+ * The pill that marks the row a wheel reads from, and the fades that turn a
+ * cropped list into something that looks like it keeps turning.
+ */
+function WheelWindow({
+	children,
+	row = ROW,
+}: {
+	children: React.ReactNode;
+	row?: number;
+}) {
+	return (
+		<div className="relative mx-auto w-full max-w-sm">
+			{/* Behind the numbers and untouchable, so a drag that starts on it
+			    still scrolls the wheel underneath. */}
+			<div
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-x-0 top-1/2 z-0 -translate-y-1/2 rounded-xl border border-foreground/55 bg-muted/60"
+				style={{ height: row }}
+			/>
+			<div className="relative z-10 flex gap-2">{children}</div>
+			<div
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-gradient-to-b from-background to-transparent"
+			/>
+			<div
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-16 bg-gradient-to-t from-background to-transparent"
+			/>
+		</div>
 	);
 }
 
@@ -716,15 +1225,19 @@ function Wheel({
 	value,
 	optionLabel,
 	onChange,
+	emphasis = false,
 }: {
 	label: string;
 	options: number[];
 	value: number;
 	optionLabel: (value: number) => string;
 	onChange: (value: number) => void;
+	/** A wheel that is the whole answer, rather than one of three. */
+	emphasis?: boolean;
 }) {
 	const ref = useRef<HTMLDivElement>(null);
 	const index = Math.max(0, options.indexOf(value));
+	const row = emphasis ? BIG_ROW : ROW;
 
 	// Where a drag started, and how far it has travelled. Refs rather than
 	// state: this changes on every pointer event, and none of it should cost a
@@ -740,10 +1253,10 @@ function Wheel({
 	useEffect(() => {
 		const element = ref.current;
 		if (!element) return;
-		const target = index * ROW;
-		if (Math.abs(element.scrollTop - target) < ROW / 2) return;
+		const target = index * row;
+		if (Math.abs(element.scrollTop - target) < row / 2) return;
 		element.scrollTo({ top: target });
-	}, [index]);
+	}, [index, row]);
 
 	const step = (by: number) => {
 		const next = options[Math.min(options.length - 1, Math.max(0, index + by))];
@@ -801,21 +1314,21 @@ function Wheel({
 				if (!from) return;
 				// Snapping was off through the drag, so nothing has landed on a row
 				// yet. Turning it back on does not scroll, so put it there.
-				const target = Math.round(event.currentTarget.scrollTop / ROW) * ROW;
+				const target = Math.round(event.currentTarget.scrollTop / row) * row;
 				event.currentTarget.scrollTo({ behavior: "smooth", top: target });
 			}}
 			onScroll={(event) => {
-				const next = options[Math.round(event.currentTarget.scrollTop / ROW)];
+				const next = options[Math.round(event.currentTarget.scrollTop / row)];
 				if (next !== undefined && next !== value) onChange(next);
 			}}
 			ref={ref}
 			role="spinbutton"
 			style={
 				{
-					"--wheel-height": `${ROW * ROWS}px`,
+					"--wheel-height": `${row * ROWS}px`,
 					// Half the window above and below, so the first and last values
 					// can still reach the middle.
-					paddingBlock: (ROW * (ROWS - 1)) / 2,
+					paddingBlock: (row * (ROWS - 1)) / 2,
 				} as React.CSSProperties
 			}
 			tabIndex={0}
@@ -825,9 +1338,10 @@ function Wheel({
 				return (
 					<button
 						className={cn(
-							"flex w-full snap-center items-center justify-center text-center text-lg tabular-nums transition-colors",
+							"flex w-full snap-center items-center justify-center text-center tabular-nums transition-colors",
+							emphasis ? "text-4xl" : "text-lg",
 							distance === 0
-								? "font-medium text-foreground"
+								? cn("text-foreground", emphasis ? "font-bold" : "font-medium")
 								: distance === 1
 									? "text-muted-foreground"
 									: "text-muted-foreground/45",
@@ -840,7 +1354,7 @@ function Wheel({
 							if (dragged.current > 4) return;
 							onChange(option);
 						}}
-						style={{ height: ROW }}
+						style={{ height: row }}
 						// Each row is reachable by pointer but not by tab: the wheel
 						// itself is the one stop, and arrow keys move within it.
 						tabIndex={-1}

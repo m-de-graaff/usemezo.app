@@ -1,8 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@mezo/ui/card";
-import { stats } from "~/components/dashboard/data";
+import type { Stat } from "~/components/dashboard/data";
 import { Delta } from "~/components/dashboard/delta";
 
-export function StatCards() {
+export function StatCards({ stats }: { stats: Stat[] }) {
 	return (
 		<>
 			{stats.map((stat) => (

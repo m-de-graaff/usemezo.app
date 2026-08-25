@@ -1,4 +1,4 @@
-const BARS = [
+export const BARS = [
 	{ x: 2, y: 11, height: 10 },
 	{ x: 7.2, y: 5, height: 16 },
 	{ x: 12.4, y: 15, height: 6 },

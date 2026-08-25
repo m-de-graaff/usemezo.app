@@ -44,6 +44,22 @@ export const profileRouter = createTRPCRouter({
 			const userId = ctx.session.user.id;
 			const { name, ...answers } = input;
 
+			// A handle is claimed once, during onboarding, and is what every
+			// profile link points at. The form no longer offers it, so this is
+			// the guarantee rather than the reminder.
+			if (answers.username !== undefined) {
+				const existing = await ctx.db.query.userProfile.findFirst({
+					where: eq(userProfile.userId, userId),
+					columns: { username: true },
+				});
+				if (existing?.username && existing.username !== answers.username) {
+					throw new TRPCError({
+						code: "FORBIDDEN",
+						message: "Your handle cannot be changed once it is claimed.",
+					});
+				}
+			}
+
 			if (name !== undefined) {
 				await ctx.db
 					.update(user)

@@ -22,7 +22,7 @@ import {
 } from "@mezo/ui/select";
 import { useId, useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { parseDay, trainingVolume } from "~/components/dashboard/data";
+import { type DayPoint, parseDay } from "~/components/dashboard/data";
 import { Delta } from "~/components/dashboard/delta";
 
 const RANGES = [
@@ -35,17 +35,24 @@ const chartConfig = {
 	value: { label: "Volume (kg)", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
+/**
+ * Thousands only once there are thousands. Rounding every value to `k` turned a
+ * first week of training into an axis of five zeroes.
+ */
+const formatTonnage = (kg: number) =>
+	kg >= 1000 ? `${Math.round(kg / 1000)}k` : String(Math.round(kg));
+
 const formatTick = (isoDate: string, days: number) =>
 	parseDay(isoDate).toLocaleDateString("en-GB", {
 		...(days <= 7 ? { weekday: "short" } : { day: "numeric", month: "short" }),
 	});
 
-export function TrainingVolumeChart() {
+export function TrainingVolumeChart({ rows: all }: { rows: DayPoint[] }) {
 	// `useId` contains colons, which are not valid in an SVG fragment reference.
 	const gradientId = `training-volume-${useId().replace(/:/g, "")}`;
 	const [days, setDays] = useState(30);
 
-	const rows = useMemo(() => trainingVolume.slice(-days), [days]);
+	const rows = useMemo(() => all.slice(-days), [all, days]);
 	const change = useMemo(() => {
 		const first = rows[0]?.value ?? 0;
 		const last = rows.at(-1)?.value ?? 0;
@@ -121,9 +128,7 @@ export function TrainingVolumeChart() {
 						<YAxis
 							axisLine={false}
 							tick={{ className: "tabular-nums" }}
-							tickFormatter={(value: unknown) =>
-								`${Math.round(Number(value) / 1000)}k`
-							}
+							tickFormatter={(value: unknown) => formatTonnage(Number(value))}
 							tickLine={false}
 							tickMargin={8}
 							width={36}
@@ -152,7 +157,10 @@ export function TrainingVolumeChart() {
 							fill={`url(#${gradientId})`}
 							stroke="var(--color-value)"
 							strokeWidth={2}
-							type="natural"
+							// Monotone, not natural: a spline through a mostly-flat series
+							// overshoots, and this one drew the day before a session as
+							// negative training volume.
+							type="monotone"
 						/>
 					</AreaChart>
 				</ChartContainer>

@@ -23,7 +23,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { Backdrop } from "~/components/backdrop";
-import { LogoMark } from "~/components/logo";
+import { Logo } from "~/components/logo";
 import { PlanSummary } from "~/components/onboarding/plan-summary";
 import { QuestionField } from "~/components/onboarding/question-control";
 import type {
@@ -220,6 +220,12 @@ export function OnboardingFlow({
 		// partial is for.
 		save.mutate({
 			[field.name]: submitted(field, values[field.name] ?? null),
+			// The kg/lb switch lives on the measurement screens rather than in a
+			// question of its own, so whatever it was left on rides along with the
+			// measurement it was labelling.
+			...(field.type === "number" && field.measure
+				? { units: values.units }
+				: {}),
 		} as ProfileInput);
 	};
 
@@ -353,7 +359,6 @@ export function OnboardingFlow({
 								// flag that stops the app redirecting back here.
 								onFinish={(dailyCalories) => finish.mutate({ dailyCalories })}
 								pending={pending}
-								system={system}
 								values={values}
 							/>
 						)}
@@ -495,12 +500,10 @@ function BrandPanel({
 				className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-foreground via-foreground/85 to-transparent"
 			/>
 
-			<div className="relative flex items-center gap-2.5">
-				<span className="flex size-8 items-center justify-center rounded-lg bg-background text-foreground">
-					<LogoMark className="size-4" />
-				</span>
-				<span className="font-semibold tracking-tight">mezo</span>
-			</div>
+			{/* The same lockup the auth pages use, so signing up and setting up show
+			    one logo rather than two. The colour flips on its own: the mark fills
+			    with `currentColor`, and the panel's ink is already the inverted one. */}
+			<Logo className="relative text-lg" />
 
 			{/* `mb-2` because the footer line that used to sit under this is gone,
 			    and `mt-auto` alone leaves the last line flush with the padding. */}

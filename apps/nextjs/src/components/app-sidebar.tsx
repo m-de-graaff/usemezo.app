@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@mezo/ui/badge";
 import {
 	Sidebar,
 	SidebarContent,
@@ -20,6 +21,7 @@ import {
 	settingsNavGroups,
 } from "~/components/app-nav";
 import { LogoMark } from "~/components/logo";
+import { MiloThreadList } from "~/components/milo/thread-list";
 
 export function AppSidebar() {
 	const pathname = usePathname();
@@ -53,12 +55,24 @@ export function AppSidebar() {
 									>
 										<item.icon />
 										<span>{item.title}</span>
+										{item.badge && (
+											<Badge
+												className="ml-auto group-data-[collapsible=icon]:hidden"
+												variant="secondary"
+											>
+												{item.badge}
+											</Badge>
+										)}
 									</SidebarMenuButton>
 								</SidebarMenuItem>
 							))}
 						</SidebarMenu>
 					</SidebarGroup>
 				))}
+				{/* Past conversations belong next to the chat and nowhere else, so
+				    this appends rather than swapping the nav out the way Settings
+				    does. */}
+				{pathname.startsWith("/milo") && <MiloThreadList />}
 			</SidebarContent>
 			{inSettings && (
 				<SidebarFooter>

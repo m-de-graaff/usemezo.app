@@ -139,3 +139,17 @@
 		@apply font-sans;
 	}
 }
+
+/* assistant-ui's `dot.css` trails a pulsing dot after streaming markdown, which
+   is the effect worth having. It also draws one when the markdown block is
+   still empty — and that is the exact moment Milo's thread renders its own
+   "thinking" dot, so the two land together and the user sees two. Suppressing
+   the empty case leaves one dot in every state: the thread's before any text
+   arrives, and this one trailing it afterwards.
+
+   Written without `:where()`, unlike the rule it overrides, so it wins on
+   specificity rather than on which stylesheet the bundler happens to emit
+   last. */
+.aui-md[data-status="running"]:empty::after {
+	content: none;
+}

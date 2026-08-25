@@ -137,6 +137,242 @@ export const EATING_HABITS: Options = {
 	other: "Something else",
 };
 
+/**
+ * What people actually turn up taking, by generic name. Not a formulary: the
+ * point is a list someone recognises their own prescription in, not one a
+ * pharmacist could dispense from — a brand or a dose would multiply this by ten
+ * without telling Mezo anything more about the plan it is building.
+ *
+ * The first `COMMON_MEDICATIONS` entries are the ones most likely to be picked,
+ * and the control shows them first under their own heading. Everything after
+ * them is alphabetical.
+ */
+export const COMMON_MEDICATIONS = 12;
+
+export const MEDICATIONS: Options = {
+	paracetamol: "Paracetamol (acetaminophen)",
+	ibuprofen: "Ibuprofen",
+	omeprazole: "Omeprazole",
+	metformin: "Metformin",
+	atorvastatin: "Atorvastatin",
+	levothyroxine: "Levothyroxine",
+	amlodipine: "Amlodipine",
+	lisinopril: "Lisinopril",
+	sertraline: "Sertraline",
+	salbutamol: "Salbutamol (albuterol) inhaler",
+	cetirizine: "Cetirizine",
+	aspirin: "Aspirin (low dose)",
+
+	allopurinol: "Allopurinol",
+	amitriptyline: "Amitriptyline",
+	amoxicillin: "Amoxicillin",
+	apixaban: "Apixaban",
+	atenolol: "Atenolol",
+	azithromycin: "Azithromycin",
+	bisoprolol: "Bisoprolol",
+	budesonide: "Budesonide",
+	bupropion: "Bupropion",
+	candesartan: "Candesartan",
+	carvedilol: "Carvedilol",
+	ciprofloxacin: "Ciprofloxacin",
+	citalopram: "Citalopram",
+	clopidogrel: "Clopidogrel",
+	codeine: "Codeine",
+	dapagliflozin: "Dapagliflozin",
+	desloratadine: "Desloratadine",
+	diazepam: "Diazepam",
+	diclofenac: "Diclofenac",
+	doxycycline: "Doxycycline",
+	duloxetine: "Duloxetine",
+	empagliflozin: "Empagliflozin",
+	escitalopram: "Escitalopram",
+	esomeprazole: "Esomeprazole",
+	ezetimibe: "Ezetimibe",
+	finasteride: "Finasteride",
+	fluoxetine: "Fluoxetine",
+	fluticasone: "Fluticasone",
+	furosemide: "Furosemide",
+	gabapentin: "Gabapentin",
+	gliclazide: "Gliclazide",
+	hydrochlorothiazide: "Hydrochlorothiazide",
+	hydroxychloroquine: "Hydroxychloroquine",
+	insulin: "Insulin",
+	lamotrigine: "Lamotrigine",
+	lansoprazole: "Lansoprazole",
+	lisdexamfetamine: "Lisdexamfetamine",
+	lithium: "Lithium",
+	loratadine: "Loratadine",
+	losartan: "Losartan",
+	methotrexate: "Methotrexate",
+	methylphenidate: "Methylphenidate",
+	metoprolol: "Metoprolol",
+	metronidazole: "Metronidazole",
+	mirtazapine: "Mirtazapine",
+	montelukast: "Montelukast",
+	morphine: "Morphine",
+	naproxen: "Naproxen",
+	nitrofurantoin: "Nitrofurantoin",
+	olanzapine: "Olanzapine",
+	ondansetron: "Ondansetron",
+	oxycodone: "Oxycodone",
+	pantoprazole: "Pantoprazole",
+	paroxetine: "Paroxetine",
+	prednisolone: "Prednisolone (prednisone)",
+	pregabalin: "Pregabalin",
+	propranolol: "Propranolol",
+	quetiapine: "Quetiapine",
+	ramipril: "Ramipril",
+	rivaroxaban: "Rivaroxaban",
+	rosuvastatin: "Rosuvastatin",
+	semaglutide: "Semaglutide",
+	sildenafil: "Sildenafil",
+	simvastatin: "Simvastatin",
+	sumatriptan: "Sumatriptan",
+	tamsulosin: "Tamsulosin",
+	tramadol: "Tramadol",
+	trazodone: "Trazodone",
+	valsartan: "Valsartan",
+	venlafaxine: "Venlafaxine",
+	warfarin: "Warfarin",
+	zolpidem: "Zolpidem",
+};
+
+/**
+ * The same idea for supplements, which is a shorter list because the ones
+ * anyone takes daily are a much smaller set than the ones sold.
+ */
+export const COMMON_SUPPLEMENTS = 12;
+
+export const SUPPLEMENTS: Options = {
+	"vitamin-d": "Vitamin D",
+	multivitamin: "Multivitamin",
+	"omega-3": "Omega-3 (fish oil)",
+	magnesium: "Magnesium",
+	creatine: "Creatine",
+	"whey-protein": "Whey protein",
+	"vitamin-c": "Vitamin C",
+	"vitamin-b12": "Vitamin B12",
+	iron: "Iron",
+	zinc: "Zinc",
+	probiotics: "Probiotics",
+	melatonin: "Melatonin",
+
+	ashwagandha: "Ashwagandha",
+	bcaa: "BCAAs",
+	"beta-alanine": "Beta-alanine",
+	biotin: "Biotin",
+	caffeine: "Caffeine tablets",
+	calcium: "Calcium",
+	"casein-protein": "Casein protein",
+	chromium: "Chromium",
+	citrulline: "Citrulline malate",
+	collagen: "Collagen",
+	coq10: "Coenzyme Q10",
+	curcumin: "Curcumin (turmeric)",
+	eaa: "EAAs",
+	electrolytes: "Electrolytes",
+	"fibre-psyllium": "Psyllium husk",
+	"folic-acid": "Folic acid",
+	ginkgo: "Ginkgo biloba",
+	ginseng: "Ginseng",
+	glucosamine: "Glucosamine",
+	glutamine: "Glutamine",
+	"green-tea-extract": "Green tea extract",
+	hmb: "HMB",
+	inositol: "Inositol",
+	iodine: "Iodine",
+	"l-carnitine": "L-carnitine",
+	"l-theanine": "L-theanine",
+	"lions-mane": "Lion's mane",
+	lutein: "Lutein",
+	maca: "Maca",
+	"milk-thistle": "Milk thistle",
+	msm: "MSM",
+	nac: "N-acetylcysteine",
+	niacin: "Niacin",
+	"nitric-oxide": "Beetroot or nitrate",
+	potassium: "Potassium",
+	"pre-workout": "Pre-workout blend",
+	"protein-plant": "Plant protein",
+	rhodiola: "Rhodiola",
+	"saw-palmetto": "Saw palmetto",
+	selenium: "Selenium",
+	spirulina: "Spirulina",
+	"st-johns-wort": "St John's wort",
+	taurine: "Taurine",
+	valerian: "Valerian",
+	"vitamin-a": "Vitamin A",
+	"vitamin-b-complex": "Vitamin B complex",
+	"vitamin-e": "Vitamin E",
+	"vitamin-k2": "Vitamin K2",
+	zma: "ZMA",
+};
+
+/**
+ * What a workout has to be built around. Grouped the way someone would say it
+ * out loud — the part that hurts, or the thing that limits it — rather than as
+ * diagnoses, because this is answered by the person training, not by a clinic.
+ *
+ * Mezo is not a doctor, and nothing here is treated as one: the list exists so
+ * a plan avoids the movement, not so it names the condition.
+ */
+export const COMMON_PHYSICAL_LIMITATIONS = 12;
+
+export const PHYSICAL_LIMITATIONS: Options = {
+	"lower-back-pain": "Lower back pain",
+	"knee-pain": "Knee pain",
+	"shoulder-pain": "Shoulder pain",
+	"neck-pain": "Neck pain",
+	"hip-pain": "Hip pain",
+	"wrist-pain": "Wrist pain",
+	"ankle-pain": "Ankle or foot pain",
+	"limited-shoulder-mobility": "Limited shoulder mobility",
+	"limited-ankle-mobility": "Limited ankle mobility",
+	asthma: "Asthma",
+	"recent-surgery": "Recovering from surgery",
+	"plantar-fasciitis": "Plantar fasciitis",
+
+	"achilles-tendinopathy": "Achilles tendinopathy",
+	"acl-injury": "ACL injury or reconstruction",
+	"balance-problems": "Balance problems or vertigo",
+	"bulging-disc": "Bulging or herniated disc",
+	"carpal-tunnel": "Carpal tunnel syndrome",
+	"chronic-fatigue": "Chronic fatigue",
+	copd: "COPD or limited lung capacity",
+	"elbow-tendinopathy": "Tennis or golfer's elbow",
+	epilepsy: "Epilepsy",
+	fibromyalgia: "Fibromyalgia",
+	"frozen-shoulder": "Frozen shoulder",
+	"hearing-impairment": "Hearing impairment",
+	"heart-condition": "Heart condition",
+	hernia: "Hernia",
+	"high-blood-pressure": "High blood pressure",
+	"hip-replacement": "Hip replacement",
+	hypermobility: "Joint hypermobility",
+	"it-band-syndrome": "IT band syndrome",
+	"knee-replacement": "Knee replacement",
+	"limited-grip-strength": "Limited grip strength",
+	"meniscus-tear": "Meniscus tear",
+	migraine: "Migraine",
+	"multiple-sclerosis": "Multiple sclerosis",
+	neuropathy: "Nerve pain or neuropathy",
+	osteoarthritis: "Osteoarthritis",
+	osteoporosis: "Osteoporosis or low bone density",
+	"pelvic-floor": "Pelvic floor problems",
+	"post-natal": "Post-natal recovery",
+	pregnancy: "Pregnancy",
+	prosthesis: "Prosthetic limb",
+	"rheumatoid-arthritis": "Rheumatoid arthritis",
+	"rotator-cuff": "Rotator cuff injury",
+	sciatica: "Sciatica",
+	scoliosis: "Scoliosis",
+	"shin-splints": "Shin splints",
+	"sleep-apnoea": "Sleep apnoea",
+	"spinal-fusion": "Spinal fusion",
+	"visual-impairment": "Visual impairment",
+	"wheelchair-user": "Wheelchair user",
+};
+
 export const CHECKUP_FREQUENCY: Options = {
 	never: "Never",
 	rarely: "Rarely (only when something is wrong)",
@@ -226,12 +462,33 @@ export const profileInput = z.object({
 	targetWeightKg: z.number().min(25).max(400).nullish(),
 	activityLevel: enumOf(ACTIVITY_LEVELS).nullish(),
 
+	// Body composition. Every one of these is optional: they come off a smart
+	// scale or a DEXA, and most people have none of them.
+	bodyFatPercent: z.number().min(3).max(70).nullish(),
+	bodyFatMassKg: z.number().min(0.5).max(200).nullish(),
+	skeletalMuscleMassKg: z.number().min(5).max(100).nullish(),
+	totalBodyWaterKg: z.number().min(5).max(120).nullish(),
+	boneMassKg: z.number().min(0.5).max(10).nullish(),
+	proteinMassKg: z.number().min(1).max(50).nullish(),
+	visceralFatLevel: z.number().int().min(1).max(59).nullish(),
+	basalMetabolicRateKcal: z.number().int().min(500).max(5000).nullish(),
+	waistCm: z.number().min(40).max(200).nullish(),
+
 	eatingHabits: enumOf(EATING_HABITS).nullish(),
 	dailyCalories: z.number().int().min(500).max(10000).nullish(),
 
-	medications: z.string().max(1000).nullish(),
-	supplements: z.string().max(1000).nullish(),
-	physicalLimitations: z.string().max(1000).nullish(),
+	medications: z
+		.array(enumOf(MEDICATIONS))
+		.max(Object.keys(MEDICATIONS).length)
+		.nullish(),
+	supplements: z
+		.array(enumOf(SUPPLEMENTS))
+		.max(Object.keys(SUPPLEMENTS).length)
+		.nullish(),
+	physicalLimitations: z
+		.array(enumOf(PHYSICAL_LIMITATIONS))
+		.max(Object.keys(PHYSICAL_LIMITATIONS).length)
+		.nullish(),
 	checkupFrequency: enumOf(CHECKUP_FREQUENCY).nullish(),
 });
 
@@ -283,7 +540,18 @@ export type Field = FieldBase &
 				sliderMin?: number;
 				sliderMax?: number;
 		  }
-		| { type: "select" | "multiselect"; options: Options }
+		| { type: "select"; options: Options }
+		| {
+				type: "multiselect";
+				options: Options;
+				/**
+				 * How many of the leading options are the common ones. Its presence
+				 * says the list is long enough to be searched rather than read: the
+				 * control puts these first under their own heading and gives the rest
+				 * a search box, instead of printing two hundred checkboxes.
+				 */
+				common?: number;
+		  }
 		| { type: "toggle"; onLabel: string; offLabel: string }
 	);
 
@@ -315,8 +583,8 @@ export const SECTIONS: readonly Section[] = [
 				label: "Username",
 				question: "Pick your username",
 				prefix: "@",
-				placeholder: "markdg",
-				help: "Letters, numbers and underscores. Your profile lives at mezo.app/@yourname.",
+				placeholder: "username",
+				help: "Letters, numbers and underscores. Your profile lives at mezo.app/@yourname, and the handle is permanent once claimed.",
 			},
 			{
 				type: "toggle",
@@ -505,28 +773,31 @@ export const SECTIONS: readonly Section[] = [
 			"Context Mezo needs before it suggests anything. Mezo is not a doctor, and none of this replaces one.",
 		fields: [
 			{
-				type: "textarea",
+				type: "multiselect",
 				name: "medications",
 				label: "Medications you take",
 				question: "Do you take any medications?",
-				placeholder: "One per line, e.g. metformin 500mg",
-				help: "Leave blank if you take none.",
+				options: MEDICATIONS,
+				common: COMMON_MEDICATIONS,
+				help: "Search by generic name. Leave empty if you take none.",
 			},
 			{
-				type: "textarea",
+				type: "multiselect",
 				name: "supplements",
 				label: "Supplements you take",
 				question: "Do you take any supplements?",
-				placeholder: "One per line, e.g. creatine 5g",
-				help: "Leave blank if you take none.",
+				options: SUPPLEMENTS,
+				common: COMMON_SUPPLEMENTS,
+				help: "Leave empty if you take none.",
 			},
 			{
-				type: "textarea",
+				type: "multiselect",
 				name: "physicalLimitations",
 				label: "Physical limitations",
 				question: "Anything a workout should work around?",
-				placeholder: "e.g. lower back pain, reconstructed left knee",
-				help: "Anything a workout should work around. Leave blank if none.",
+				options: PHYSICAL_LIMITATIONS,
+				common: COMMON_PHYSICAL_LIMITATIONS,
+				help: "Anything a workout should work around. Leave empty if none.",
 			},
 			{
 				type: "select",
@@ -534,6 +805,106 @@ export const SECTIONS: readonly Section[] = [
 				label: "How often you get a health checkup",
 				question: "How often do you get a health checkup?",
 				options: CHECKUP_FREQUENCY,
+			},
+		],
+	},
+	{
+		slug: "advanced",
+		title: "Advanced",
+		description:
+			"Body composition, if you have it. A smart scale, a DEXA scan or a caliper reading all answer these; leave any of them empty and Mezo works without it.",
+		fields: [
+			{
+				type: "number",
+				name: "bodyFatPercent",
+				label: "Body fat",
+				question: "What is your body fat percentage?",
+				min: 3,
+				max: 70,
+				step: 0.1,
+				unit: "%",
+				help: "The single most useful one here. It splits your weight into the part a plan can change quickly and the part it cannot.",
+			},
+			{
+				type: "number",
+				name: "skeletalMuscleMassKg",
+				label: "Skeletal muscle mass",
+				question: "What is your skeletal muscle mass?",
+				min: 5,
+				max: 100,
+				step: 0.1,
+				measure: "mass",
+				help: "Muscle you can train, rather than all lean tissue. Holding this steady is what makes a cut worth doing.",
+			},
+			{
+				type: "number",
+				name: "bodyFatMassKg",
+				label: "Body fat mass",
+				question: "What is your body fat mass?",
+				min: 0.5,
+				max: 200,
+				step: 0.1,
+				measure: "mass",
+			},
+			{
+				type: "number",
+				name: "totalBodyWaterKg",
+				label: "Total body water",
+				question: "What is your total body water?",
+				min: 5,
+				max: 120,
+				step: 0.1,
+				measure: "mass",
+				help: "Moves with hydration and salt, so read it as a trend rather than as a number for one morning.",
+			},
+			{
+				type: "number",
+				name: "proteinMassKg",
+				label: "Protein mass",
+				question: "What is your protein mass?",
+				min: 1,
+				max: 50,
+				step: 0.1,
+				measure: "mass",
+			},
+			{
+				type: "number",
+				name: "boneMassKg",
+				label: "Bone mass",
+				question: "What is your bone mass?",
+				min: 0.5,
+				max: 10,
+				step: 0.1,
+				measure: "mass",
+			},
+			{
+				type: "number",
+				name: "visceralFatLevel",
+				label: "Visceral fat level",
+				question: "What is your visceral fat level?",
+				min: 1,
+				max: 59,
+				help: "The 1 to 59 index a scale reports, not a weight. Under 13 is the usual healthy range.",
+			},
+			{
+				type: "number",
+				name: "basalMetabolicRateKcal",
+				label: "Measured BMR",
+				question: "What is your measured BMR?",
+				min: 500,
+				max: 5000,
+				unit: "kcal",
+				help: "Only if a device measured it. A measured figure replaces the one Mezo estimates from your height, weight and age.",
+			},
+			{
+				type: "number",
+				name: "waistCm",
+				label: "Waist circumference",
+				question: "What is your waist circumference?",
+				min: 40,
+				max: 200,
+				measure: "length",
+				help: "Measured at the navel. It tracks the fat that matters most for health, and it needs nothing but a tape.",
 			},
 		],
 	},
@@ -586,15 +957,10 @@ const ONBOARDING_PLAN = [
 			"Stored in metric, shown however you think. These are the whole input to your starting plan.",
 		aside:
 			"Rough is fine. A number you can correct beats a blank Mezo has to work around.",
-		// The target weight sits after the current one on purpose: it is the only
-		// order in which "12 kg to lose" can be shown beside it as it is chosen.
-		fields: [
-			"units",
-			"heightCm",
-			"weightKg",
-			"activityLevel",
-			"targetWeightKg",
-		],
+		// No units question: the kg/lb switch sits on the measurements themselves,
+		// which is the only place the answer means anything. No target weight
+		// either — first run asks what is true today, not what is being aimed at.
+		fields: ["heightCm", "weightKg", "activityLevel"],
 	},
 	{
 		title: "Handle",
@@ -638,13 +1004,12 @@ export type OnboardingQuestion = { field: Field; step: number };
  * left empty and filled in later from Settings — the plan screen says what it
  * could not work out rather than the flow refusing to move.
  *
- * These three are here because the app cannot function without them: a name to
- * address you by, a unit system to render every number in, and a handle for the
- * profile route.
+ * These two are here because the app cannot function without them: a name to
+ * address you by and a handle for the profile route. Units are not among them —
+ * the kg/lb switch sits on the measurement screens and defaults to metric.
  */
 export const ONBOARDING_REQUIRED: ReadonlySet<Field["name"]> = new Set([
 	"name",
-	"units",
 	"username",
 ]);
 

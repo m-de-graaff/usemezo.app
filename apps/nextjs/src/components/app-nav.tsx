@@ -1,11 +1,14 @@
 import { SECTIONS } from "@mezo/api/profile-fields";
 import {
+	ChartPieIcon,
+	DumbbellIcon,
 	HeartPulseIcon,
 	IdCardIcon,
 	LayoutGridIcon,
 	SaladIcon,
 	ScaleIcon,
 	SettingsIcon,
+	SparklesIcon,
 	TargetIcon,
 	UserRoundIcon,
 } from "lucide-react";
@@ -15,6 +18,8 @@ export type NavItem = {
 	title: string;
 	href: string;
 	icon: ComponentType<{ className?: string }>;
+	/** A small label after the title, like the AI pill on Milo. */
+	badge?: string;
 	/** Rendered before the item in the header breadcrumb, when it has one. */
 	parent?: { title: string; href: string };
 };
@@ -34,6 +39,8 @@ export const navGroups: NavGroup[] = [
 		label: "Product",
 		items: [
 			{ title: "Dashboard", href: "/dashboard", icon: LayoutGridIcon },
+			{ title: "Workouts", href: "/workouts", icon: DumbbellIcon },
+			{ title: "Milo", href: "/milo", icon: SparklesIcon, badge: "AI" },
 			{ title: "Settings", href: "/settings", icon: SettingsIcon },
 		],
 	},
@@ -47,6 +54,7 @@ const SECTION_ICONS: Record<string, ComponentType<{ className?: string }>> = {
 	goals: TargetIcon,
 	body: ScaleIcon,
 	nutrition: SaladIcon,
+	advanced: ChartPieIcon,
 	health: HeartPulseIcon,
 };
 

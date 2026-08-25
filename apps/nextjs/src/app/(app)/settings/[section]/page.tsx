@@ -25,6 +25,6 @@ export default async function SettingsSectionPage({ params }: Props) {
 		// Keyed on the slug: sibling settings routes render the same component in
 		// the same slot, and without this the form would keep the previous
 		// section's state instead of re-seeding from the server.
-		<SettingsForm key={section.slug} section={section} values={answers} />
+		<SettingsForm key={section.slug} slug={section.slug} values={answers} />
 	);
 }
