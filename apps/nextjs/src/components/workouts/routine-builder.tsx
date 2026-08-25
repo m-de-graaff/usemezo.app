@@ -1,13 +1,19 @@
 "use client";
 
 import { type Exercise, exerciseById } from "@mezo/api/exercises";
-import { newKey, type RoutineExercise } from "@mezo/api/workout-shape";
+import {
+	newKey,
+	normaliseSupersets,
+	type RoutineExercise,
+	supersetRuns,
+} from "@mezo/api/workout-shape";
 import { Button } from "@mezo/ui/button";
 import { Input } from "@mezo/ui/input";
 import { toast } from "@mezo/ui/sonner";
 import {
 	ChevronDownIcon,
 	ChevronUpIcon,
+	Link2Icon,
 	PlusIcon,
 	TrashIcon,
 } from "lucide-react";
@@ -16,13 +22,9 @@ import { useState } from "react";
 import { ExercisePicker } from "~/components/workouts/exercise-picker";
 import { ExerciseThumb } from "~/components/workouts/exercise-thumb";
 import { SetRows } from "~/components/workouts/set-rows";
+import { SupersetGroup } from "~/components/workouts/superset";
 import { unitSystem } from "~/lib/measure";
 import { api } from "~/trpc/react";
-
-/** What a freshly added exercise starts as, before anyone has an opinion. */
-const DEFAULT_SETS = 3;
-const DEFAULT_REPS = 10;
-const DEFAULT_WEIGHT_KG = 20;
 
 /**
  * Build or edit one routine.
@@ -76,14 +78,10 @@ export function RoutineBuilder({
 	const add = (exercise: Exercise) =>
 		setExercises((current) => [
 			...current,
-			{
-				key: newKey(),
-				exerciseId: exercise.id,
-				sets: Array.from({ length: DEFAULT_SETS }, () => ({
-					reps: DEFAULT_REPS,
-					weightKg: DEFAULT_WEIGHT_KG,
-				})),
-			},
+			// No sets. What you are about to lift is not something this screen
+			// knows, and three sets of ten at twenty kilos is a number the lifter
+			// has to correct rather than one that helps.
+			{ key: newKey(), exerciseId: exercise.id, sets: [] },
 		]);
 
 	// Buttons rather than drag: WCAG 2.2 SC 2.5.7 wants a single-pointer path,
@@ -96,7 +94,30 @@ export function RoutineBuilder({
 			if (!a || !b) return current;
 			next[index] = b;
 			next[index + by] = a;
-			return next;
+			// Moving an exercise out of a superset, or into the middle of one, is
+			// how a group ends up meaning something the list no longer shows.
+			return normaliseSupersets(next);
+		});
+
+	// Joining is always with the exercise above, because a superset is exercises
+	// done back to back and a pair of neighbours is the only thing a flat list
+	// can express. The button is absent on the first row for the same reason.
+	const toggleSuperset = (index: number) =>
+		setExercises((current) => {
+			const entry = current[index];
+			const previous = current[index - 1];
+			if (!entry || !previous) return current;
+			const joined =
+				entry.supersetId !== undefined &&
+				entry.supersetId === previous.supersetId;
+			const supersetId = joined ? undefined : (previous.supersetId ?? newKey());
+			return normaliseSupersets(
+				current.map((item, i) => {
+					if (i === index) return { ...item, supersetId };
+					if (i === index - 1 && !joined) return { ...item, supersetId };
+					return item;
+				}),
+			);
 		});
 
 	const patch = (key: string, sets: RoutineExercise["sets"]) =>
@@ -105,7 +126,90 @@ export function RoutineBuilder({
 		);
 
 	const drop = (key: string) =>
-		setExercises((current) => current.filter((entry) => entry.key !== key));
+		setExercises((current) =>
+			normaliseSupersets(current.filter((entry) => entry.key !== key)),
+		);
+
+	/** One exercise, at its position in the flat list, which is what the buttons act on. */
+	const card = (entry: RoutineExercise, index: number) => {
+		const exercise = exerciseById(entry.exerciseId);
+		const label = exercise?.name ?? "this exercise";
+		const previous = exercises[index - 1];
+		const joined =
+			entry.supersetId !== undefined &&
+			entry.supersetId === previous?.supersetId;
+
+		return (
+			<li className="rounded-xl border bg-card p-4" key={entry.key}>
+				<div className="mb-3 flex items-center gap-2">
+					<ExerciseThumb exerciseId={entry.exerciseId} />
+					<p className="min-w-0 flex-1 truncate font-medium capitalize">
+						{exercise?.name ?? "Unknown exercise"}
+					</p>
+					<Button
+						aria-label={`Move ${label} up`}
+						disabled={index === 0}
+						onClick={() => move(index, -1)}
+						size="icon-sm"
+						variant="ghost"
+					>
+						<ChevronUpIcon aria-hidden="true" />
+					</Button>
+					<Button
+						aria-label={`Move ${label} down`}
+						disabled={index === exercises.length - 1}
+						onClick={() => move(index, 1)}
+						size="icon-sm"
+						variant="ghost"
+					>
+						<ChevronDownIcon aria-hidden="true" />
+					</Button>
+					<Button
+						aria-label={
+							joined
+								? `Take ${label} out of its superset`
+								: `Superset ${label} with the exercise above`
+						}
+						disabled={index === 0}
+						onClick={() => toggleSuperset(index)}
+						size="icon-sm"
+						variant={joined ? "secondary" : "ghost"}
+					>
+						<Link2Icon aria-hidden="true" />
+					</Button>
+					<Button
+						aria-label={`Remove ${label}`}
+						onClick={() => drop(entry.key)}
+						size="icon-sm"
+						variant="ghost"
+					>
+						<TrashIcon aria-hidden="true" />
+					</Button>
+				</div>
+				<SetRows
+					exerciseName={label}
+					onChange={(sets) => patch(entry.key, sets)}
+					sets={entry.sets}
+					system={system}
+				/>
+			</li>
+		);
+	};
+
+	// The runs come from the shape helper, but the buttons act on a position in
+	// the flat list, so that index is tracked across runs rather than restarted
+	// inside each one.
+	let flat = 0;
+	let group = 0;
+	const rows = supersetRuns(exercises).flatMap((run) => {
+		const cards = run.entries.map((entry) => card(entry, flat++));
+		if (run.entries.length < 2) return cards;
+		return (
+			<SupersetGroup index={group++} key={run.id} size={run.entries.length}>
+				{cards}
+			</SupersetGroup>
+		);
+	});
 
 	return (
 		<div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -138,54 +242,7 @@ export function RoutineBuilder({
 					No exercises yet. Add the first one.
 				</p>
 			) : (
-				<ul className="flex flex-col gap-4">
-					{exercises.map((entry, index) => {
-						const exercise = exerciseById(entry.exerciseId);
-						const label = exercise?.name ?? "this exercise";
-						return (
-							<li className="rounded-xl border bg-card p-4" key={entry.key}>
-								<div className="mb-3 flex items-center gap-2">
-									<ExerciseThumb exerciseId={entry.exerciseId} />
-									<p className="min-w-0 flex-1 truncate font-medium capitalize">
-										{exercise?.name ?? "Unknown exercise"}
-									</p>
-									<Button
-										aria-label={`Move ${label} up`}
-										disabled={index === 0}
-										onClick={() => move(index, -1)}
-										size="icon-sm"
-										variant="ghost"
-									>
-										<ChevronUpIcon aria-hidden="true" />
-									</Button>
-									<Button
-										aria-label={`Move ${label} down`}
-										disabled={index === exercises.length - 1}
-										onClick={() => move(index, 1)}
-										size="icon-sm"
-										variant="ghost"
-									>
-										<ChevronDownIcon aria-hidden="true" />
-									</Button>
-									<Button
-										aria-label={`Remove ${label}`}
-										onClick={() => drop(entry.key)}
-										size="icon-sm"
-										variant="ghost"
-									>
-										<TrashIcon aria-hidden="true" />
-									</Button>
-								</div>
-								<SetRows
-									exerciseName={label}
-									onChange={(sets) => patch(entry.key, sets)}
-									sets={entry.sets}
-									system={system}
-								/>
-							</li>
-						);
-					})}
-				</ul>
+				<ul className="flex flex-col gap-4">{rows}</ul>
 			)}
 
 			<div className="flex flex-wrap items-center gap-2">
