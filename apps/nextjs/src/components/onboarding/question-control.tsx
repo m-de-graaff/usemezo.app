@@ -4,7 +4,15 @@ import type { Field, ProfileInput } from "@mezo/api/profile-fields";
 import { Input } from "@mezo/ui/input";
 import { Label } from "@mezo/ui/label";
 import { cn } from "@mezo/ui/lib/utils";
-import { CakeIcon, CheckIcon } from "lucide-react";
+import {
+	CakeIcon,
+	CheckIcon,
+	CircleDashedIcon,
+	MarsIcon,
+	NonBinaryIcon,
+	TransgenderIcon,
+	VenusIcon,
+} from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type {
 	Answer,
@@ -46,7 +54,14 @@ const OPTION = cn(
 	"cursor-pointer select-none transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out",
 	"has-focus-visible:ring-3 has-focus-visible:ring-ring/50 motion-safe:active:scale-[0.98]",
 	"hover:border-foreground/25 hover:bg-muted/40",
-	"has-checked:border-foreground has-checked:shadow-sm has-checked:ring-1 has-checked:ring-foreground",
+	// Chosen lifts the surface as well as drawing the border, so a selection is
+	// visible at a glance rather than only on inspection. `foreground` at low
+	// alpha rather than a fixed colour: it lightens the card on a dark theme and
+	// darkens it on a light one, which is "raised" in both.
+	"has-checked:border-foreground has-checked:bg-foreground/[0.16] has-checked:shadow-sm has-checked:ring-1 has-checked:ring-foreground",
+	// Named explicitly, because hovering a chosen option matches two rules and
+	// leaving the winner to stylesheet order is how a state ends up flickering.
+	"has-checked:hover:bg-foreground/[0.22]",
 );
 
 /**
@@ -64,6 +79,30 @@ const OPTION_CHIP = cn(
 	OPTION,
 	"relative flex min-h-11 items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-left",
 );
+
+/** A card: icon over label, for the questions that have a symbol per answer. */
+const OPTION_CARD = cn(
+	OPTION,
+	"flex w-36 flex-col items-center justify-center gap-3 rounded-3xl border border-border bg-muted/40 px-4 py-5 text-center",
+);
+
+/**
+ * Questions whose answers have a symbol worth showing. Kept here rather than on
+ * the field: `profile-fields` is the shared spec and has no business importing
+ * an icon set, and a question with no entry simply renders as rows or chips.
+ *
+ * Having an entry is what opts a question into the card layout — one source of
+ * truth, so an icon can never be added without the layout that shows it.
+ */
+const CARD_ICONS: Record<string, Record<string, typeof MarsIcon>> = {
+	gender: {
+		female: VenusIcon,
+		male: MarsIcon,
+		"non-binary": NonBinaryIcon,
+		other: TransgenderIcon,
+		"prefer-not-to-say": CircleDashedIcon,
+	},
+};
 
 /**
  * Options this short read as a row of chips; anything longer needs a line of
@@ -208,7 +247,9 @@ function ChoiceList({
 	}) {
 	const name = useId();
 	const options = Object.entries(field.options);
-	const chips = options.every(([, label]) => label.length <= CHIP_LIMIT);
+	const icons = CARD_ICONS[field.name];
+	const chips =
+		!icons && options.every(([, label]) => label.length <= CHIP_LIMIT);
 	const selected = multiple
 		? Array.isArray(value)
 			? value
@@ -230,16 +271,24 @@ function ChoiceList({
 			{help}
 			<div
 				className={cn(
-					"mt-2 gap-2",
-					chips
-						? "flex flex-wrap justify-center"
-						: "grid text-left sm:grid-cols-2",
+					"mt-2 gap-3",
+					icons
+						? // Capped so five cards break three and two rather than four and
+							// one, which is what the width alone would give.
+							"mx-auto flex max-w-lg flex-wrap justify-center"
+						: chips
+							? "flex flex-wrap justify-center gap-2"
+							: "grid gap-2 text-left sm:grid-cols-2",
 				)}
 			>
 				{options.map(([option, label]) => {
 					const isOn = selected.includes(option);
+					const Icon = icons?.[option];
 					return (
-						<label className={chips ? OPTION_CHIP : OPTION_ROW} key={option}>
+						<label
+							className={Icon ? OPTION_CARD : chips ? OPTION_CHIP : OPTION_ROW}
+							key={option}
+						>
 							<input
 								checked={isOn}
 								className="sr-only"
@@ -259,10 +308,25 @@ function ChoiceList({
 								type={multiple ? "checkbox" : "radio"}
 								value={option}
 							/>
-							<Marker multiple={multiple} on={isOn} />
-							<span className="flex-1 text-pretty font-medium text-sm">
-								{label}
-							</span>
+							{Icon ? (
+								<>
+									<Icon
+										aria-hidden="true"
+										className="size-8"
+										strokeWidth={1.5}
+									/>
+									<span className="text-pretty font-semibold text-sm leading-tight">
+										{label}
+									</span>
+								</>
+							) : (
+								<>
+									<Marker multiple={multiple} on={isOn} />
+									<span className="flex-1 text-pretty font-medium text-sm">
+										{label}
+									</span>
+								</>
+							)}
 						</label>
 					);
 				})}

@@ -353,6 +353,9 @@ export const SECTIONS: readonly Section[] = [
 				label: "Gender",
 				question: "What is your gender?",
 				options: GENDERS,
+				// The reference design says "please specify truthfully", which asks
+				// for compliance without giving a reason. This gives the reason.
+				help: "Resting metabolism is estimated differently for each, so this changes your calorie target.",
 			},
 			{
 				type: "select",
