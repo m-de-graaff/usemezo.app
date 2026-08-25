@@ -1,6 +1,7 @@
 import { SECTIONS } from "@mezo/api/profile-fields";
 import {
 	ChartPieIcon,
+	DumbbellIcon,
 	HeartPulseIcon,
 	IdCardIcon,
 	LayoutGridIcon,
@@ -38,6 +39,7 @@ export const navGroups: NavGroup[] = [
 		label: "Product",
 		items: [
 			{ title: "Dashboard", href: "/dashboard", icon: LayoutGridIcon },
+			{ title: "Workouts", href: "/workouts", icon: DumbbellIcon },
 			{ title: "Milo", href: "/milo", icon: SparklesIcon, badge: "AI" },
 			{ title: "Settings", href: "/settings", icon: SettingsIcon },
 		],
