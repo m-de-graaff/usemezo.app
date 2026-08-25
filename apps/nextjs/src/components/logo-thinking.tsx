@@ -5,50 +5,68 @@ import { BARS } from "./logo";
 
 /**
  * One bar as [centre x, centre y, length, rotation in degrees]. Every frame
- * uses the same four bars at the same width, so the mark only ever moves and
- * stretches them: the logo itself is the first frame, and the letters are the
- * same four bars rearranged.
+ * draws the same four bars, so the mark only ever moves and stretches them:
+ * the logo itself is the first frame, and each letter is those four bars
+ * rearranged. They thin out for the letters, since four bars at the logo's
+ * width would close up the counters of an e or an o.
  */
 type Bar = readonly [number, number, number, number];
+type Frame = { width: number; bars: Bar[] };
 
-const BAR_WIDTH = 3.6;
+const LOGO_WIDTH = 3.6;
+const LETTER_WIDTH = 2.6;
 
-const REST: Bar[] = BARS.map(
-	(bar) =>
-		[bar.x + BAR_WIDTH / 2, bar.y + bar.height / 2, bar.height, 0] as const,
-);
+const REST: Frame = {
+	width: LOGO_WIDTH,
+	bars: BARS.map(
+		(bar) =>
+			[bar.x + LOGO_WIDTH / 2, bar.y + bar.height / 2, bar.height, 0] as const,
+	),
+};
 
 /** Left stem, the two diagonals, right stem. */
-const M: Bar[] = [
-	[5.5, 12, 12, 0],
-	[8.9, 10, 10.3, -39],
-	[15.1, 10, 10.3, 39],
-	[18.5, 12, 12, 0],
-];
+const M: Frame = {
+	width: LETTER_WIDTH,
+	bars: [
+		[5.3, 12, 16, 0],
+		[8.65, 8.5, 12, -36.7],
+		[15.35, 8.5, 12, 36.7],
+		[18.7, 12, 16, 0],
+	],
+};
 
 /** Stem, then the three arms top to bottom. */
-const E: Bar[] = [
-	[7.8, 12, 12, 0],
-	[12.4, 7.8, 9.2, 90],
-	[11.6, 12, 7.5, 90],
-	[12.4, 16.2, 9.2, 90],
-];
+const E: Frame = {
+	width: LETTER_WIDTH,
+	bars: [
+		[5.8, 12, 16, 0],
+		[11.9, 5.3, 12.2, 90],
+		[10.9, 12, 10.2, 90],
+		[11.9, 18.7, 12.2, 90],
+	],
+};
 
 /** The diagonal is two bars end to end, since there are four to place. */
-const Z: Bar[] = [
-	[9.25, 14, 7.2, 54],
-	[12, 7.8, 13, 90],
-	[14.75, 10, 7.2, 54],
-	[12, 16.2, 13, 90],
-];
+const Z: Frame = {
+	width: LETTER_WIDTH,
+	bars: [
+		[9.15, 14.7, 8.2, 46.6],
+		[12, 5.3, 14, 90],
+		[14.85, 9.3, 8.2, 46.6],
+		[12, 18.7, 14, 90],
+	],
+};
 
-/** Four sides of a ring, overlapping at the corners. */
-const O: Bar[] = [
-	[7.3, 12, 13, 0],
-	[12, 7.3, 9.4, 90],
-	[16.7, 12, 13, 0],
-	[12, 16.7, 9.4, 90],
-];
+/** Four sides of a ring, meeting at the corners. */
+const O: Frame = {
+	width: LETTER_WIDTH,
+	bars: [
+		[6.3, 12, 16, 0],
+		[12, 5.3, 11.4, 90],
+		[17.7, 12, 16, 0],
+		[12, 18.7, 11.4, 90],
+	],
+};
 
 const FRAMES = [REST, M, E, Z, O];
 
@@ -57,10 +75,10 @@ export function LogoThinking({
 	intervalMs = 1100,
 }: {
 	className?: string;
-	/** Time each frame is held, including the morph into it. */
+	/** How long each frame is held, the morph into it included. */
 	intervalMs?: number;
 }) {
-	const [frame, setFrame] = useState(0);
+	const [index, setIndex] = useState(0);
 
 	useEffect(() => {
 		// Reduced motion keeps the resting bars: the mark is decoration, and the
@@ -68,14 +86,15 @@ export function LogoThinking({
 		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
 		const id = setInterval(
-			() => setFrame((current) => (current + 1) % FRAMES.length),
+			() => setIndex((current) => (current + 1) % FRAMES.length),
 			intervalMs,
 		);
 		return () => clearInterval(id);
 	}, [intervalMs]);
 
+	const frame = FRAMES[index] ?? REST;
 	const morphMs = Math.round(intervalMs * 0.45);
-	const transition = ["x", "y", "height", "transform"]
+	const transition = ["x", "y", "width", "height", "transform"]
 		.map((property) => `${property} ${morphMs}ms var(--ease-out-quint)`)
 		.join(", ");
 
@@ -88,10 +107,10 @@ export function LogoThinking({
 			viewBox="0 0 24 24"
 			xmlns="http://www.w3.org/2000/svg"
 		>
-			{REST.map((restingBar, index) => {
+			{REST.bars.map((restingBar, position) => {
 				const [centreX, centreY, length, rotation] =
-					FRAMES[frame]?.[index] ?? restingBar;
-				const x = centreX - BAR_WIDTH / 2;
+					frame.bars[position] ?? restingBar;
+				const x = centreX - frame.width / 2;
 				const y = centreY - length / 2;
 
 				return (
@@ -108,11 +127,11 @@ export function LogoThinking({
 							transformBox: "fill-box",
 							transformOrigin: "center",
 							transition,
-							width: `${BAR_WIDTH}px`,
+							width: `${frame.width}px`,
 							x: `${x}px`,
 							y: `${y}px`,
 						}}
-						width={BAR_WIDTH}
+						width={frame.width}
 						x={x}
 						y={y}
 					/>

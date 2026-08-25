@@ -148,7 +148,9 @@ function ChipRow({
 	value: string | undefined;
 }) {
 	return (
-		<fieldset className="flex min-w-0 gap-1 overflow-x-auto pb-1">
+		// A scrolling chip row with a native scrollbar under it is two controls
+		// where there should be one, and on Windows the bar comes with arrows.
+		<fieldset className="flex min-w-0 gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 			<legend className="sr-only">{label}</legend>
 			{options.map((option) => {
 				const on = option === value;

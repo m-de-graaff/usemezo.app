@@ -15,6 +15,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useMemo, useRef } from "react";
 import { ProfileChangeToolUI } from "~/components/milo/profile-change-card";
+import { RoutineToolUI } from "~/components/milo/routine-card";
 import { Thread } from "~/components/milo/thread";
 import { api } from "~/trpc/react";
 
@@ -63,14 +64,15 @@ export function Milo({
 	return (
 		<AssistantRuntimeProvider runtime={runtime}>
 			<ProfileChangeToolUI />
+			<RoutineToolUI />
 			<MiloThread />
 		</AssistantRuntimeProvider>
 	);
 }
 
 /**
- * Openers worth a tap, all of them things Milo can actually answer from the
- * profile it can read. A suggestion that leads somewhere it cannot go is worse
+ * Openers worth a tap, every one of them something Milo can actually do with
+ * the tools it has. A suggestion that leads somewhere it cannot go is worse
  * than no suggestion.
  */
 const OPENERS = [
@@ -89,6 +91,11 @@ const OPENERS = [
 		title: "Switch me to imperial",
 		label: "for weights and heights",
 		prompt: "Switch my units to imperial.",
+	},
+	{
+		title: "Build me an upper body session",
+		label: "from what I have",
+		prompt: "Create an upper body workout for me.",
 	},
 ];
 

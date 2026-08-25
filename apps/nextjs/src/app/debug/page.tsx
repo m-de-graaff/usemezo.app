@@ -21,7 +21,9 @@ export default function DebugPage() {
 			</section>
 
 			<section className="flex flex-col gap-4">
-				<h2 className="font-medium text-sm">At the sizes it actually renders</h2>
+				<h2 className="font-medium text-sm">
+					At the sizes it actually renders
+				</h2>
 				<div className="flex items-end gap-8 rounded-xl border border-border/60 bg-card p-10">
 					{[
 						{ className: "size-4", label: "16px" },
@@ -31,7 +33,9 @@ export default function DebugPage() {
 					].map((size) => (
 						<div className="flex flex-col items-center gap-2" key={size.label}>
 							<LogoThinking className={size.className} />
-							<span className="text-muted-foreground text-xs">{size.label}</span>
+							<span className="text-muted-foreground text-xs">
+								{size.label}
+							</span>
 						</div>
 					))}
 				</div>
