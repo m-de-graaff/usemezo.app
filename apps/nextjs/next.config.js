@@ -24,6 +24,18 @@ const config = {
 		"@mezo/env",
 		"@mezo/ui",
 	],
+	images: {
+		// Exercise stills and animations, pinned to one commit of the dataset.
+		// They are referenced rather than committed because the imagery is
+		// © Gym visual; see `packages/api/src/exercises.ts`.
+		remotePatterns: [
+			{
+				protocol: "https",
+				hostname: "cdn.jsdelivr.net",
+				pathname: "/gh/hasaneyldrm/exercises-dataset@**",
+			},
+		],
+	},
 };
 
 export default config;
