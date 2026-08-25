@@ -110,6 +110,38 @@ export const dropUnfinished = (
 		}))
 		.filter((exercise) => exercise.sets.length > 0);
 
+/**
+ * `2026-08-25`, in the reader's own zone, which is what a chart axis labels.
+ *
+ * Built from the local parts rather than `toISOString().slice(0, 10)`, which
+ * would file a session logged at nine in the evening under the following day
+ * for anyone west of UTC.
+ */
+export const isoDay = (date: Date) =>
+	`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+/**
+ * The history cursor: a timestamp and an id, in that order.
+ *
+ * Both halves are needed. Two sessions can start in the same millisecond, and
+ * ordering on the timestamp alone would then show one of them twice or not at
+ * all as the reader pages past the tie.
+ */
+export const encodeCursor = (row: { startedAt: Date; id: string }) =>
+	`${row.startedAt.toISOString()}|${row.id}`;
+
+/**
+ * The cursor is opaque to whoever holds it, so a malformed one is treated as no
+ * cursor rather than as an error: the worst it does is start the list again.
+ */
+export function decodeCursor(cursor: string | null | undefined) {
+	if (!cursor) return null;
+	const [when, id] = cursor.split("|");
+	if (!when || !id) return null;
+	const startedAt = new Date(when);
+	return Number.isNaN(startedAt.getTime()) ? null : { startedAt, id };
+}
+
 /** The reverse of `startFromRoutine`, for saving a session as a routine. */
 export const toRoutineExercises = (
 	exercises: WorkoutExercise[],

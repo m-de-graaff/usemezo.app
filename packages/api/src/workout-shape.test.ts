@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+	decodeCursor,
 	doneSetCount,
 	dropUnfinished,
+	encodeCursor,
+	isoDay,
 	newKey,
 	routineExercises,
 	startFromRoutine,
@@ -126,4 +129,31 @@ test("a session can be saved back as a routine", () => {
 		routineExercises.parse(toRoutineExercises(session)),
 		planned,
 	);
+});
+
+test("a history cursor round-trips", () => {
+	const row = { startedAt: new Date("2026-08-25T09:30:00.000Z"), id: "w1" };
+	const decoded = decodeCursor(encodeCursor(row));
+	assert.equal(decoded?.id, "w1");
+	assert.equal(decoded?.startedAt.getTime(), row.startedAt.getTime());
+});
+
+test("a missing or malformed cursor is no cursor, not an error", () => {
+	// A cursor is opaque to whoever holds it, so a strange one has to restart
+	// the list rather than take the page down.
+	assert.equal(decodeCursor(null), null);
+	assert.equal(decodeCursor(undefined), null);
+	assert.equal(decodeCursor(""), null);
+	assert.equal(decodeCursor("rubbish"), null);
+	assert.equal(decodeCursor("|w1"), null);
+	assert.equal(decodeCursor("2026-08-25T09:30:00.000Z|"), null);
+	assert.equal(decodeCursor("not-a-date|w1"), null);
+});
+
+test("a day label follows the local clock, not UTC", () => {
+	// Nine in the evening is the day it was, wherever the reader is. Slicing an
+	// ISO string would file it under tomorrow for anyone west of UTC.
+	assert.equal(isoDay(new Date(2026, 7, 25, 21, 0, 0)), "2026-08-25");
+	// Padded, or the chart's labels stop sorting as strings.
+	assert.equal(isoDay(new Date(2026, 0, 5)), "2026-01-05");
 });

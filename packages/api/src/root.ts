@@ -1,6 +1,7 @@
 import { miloRouter } from "./routers/milo";
 import { postRouter } from "./routers/post";
 import { profileRouter } from "./routers/profile";
+import { workoutRouter } from "./routers/workout";
 import { createCallerFactory, createTRPCRouter } from "./trpc";
 
 /**
@@ -12,6 +13,7 @@ export const appRouter = createTRPCRouter({
 	milo: miloRouter,
 	post: postRouter,
 	profile: profileRouter,
+	workout: workoutRouter,
 });
 
 // export type definition of API
