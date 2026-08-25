@@ -5,6 +5,7 @@
 	"type": "module",
 	"exports": {
 		".": "./src/root.ts",
+		"./exercises": "./src/exercises.ts",
 		"./milo": "./src/routers/milo.ts",
 		"./plan": "./src/plan.ts",
 		"./profile-fields": "./src/profile-fields.ts",
