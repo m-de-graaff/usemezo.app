@@ -7,17 +7,26 @@ import { BARS } from "./logo";
  * One bar as [centre x, centre y, length, rotation in degrees]. Every frame
  * draws the same four bars, so the mark only ever moves and stretches them:
  * the logo itself is the first frame, and each letter is those four bars
- * rearranged. They thin out for the letters, since four bars at the logo's
- * width would close up the counters of an e or an o.
+ * rearranged.
+ *
+ * Two things keep the letters reading as solid strokes rather than as four
+ * rectangles parked next to each other. They thin out, because four bars at
+ * the logo's width close up the counters of an e or an o. And their ends round
+ * to a half-circle, which lands every bar in a letter on a joint: caps that
+ * share a centre merge into one round corner instead of leaving the notch two
+ * square ends leave between them.
  */
 type Bar = readonly [number, number, number, number];
-type Frame = { width: number; bars: Bar[] };
+type Frame = { width: number; radius: number; bars: Bar[] };
 
 const LOGO_WIDTH = 3.6;
 const LETTER_WIDTH = 2.6;
+/** Half the width, so the ends are half-circles. */
+const LETTER_RADIUS = LETTER_WIDTH / 2;
 
 const REST: Frame = {
 	width: LOGO_WIDTH,
+	radius: 1,
 	bars: BARS.map(
 		(bar) =>
 			[bar.x + LOGO_WIDTH / 2, bar.y + bar.height / 2, bar.height, 0] as const,
@@ -27,10 +36,11 @@ const REST: Frame = {
 /** Left stem, the two diagonals, right stem. */
 const M: Frame = {
 	width: LETTER_WIDTH,
+	radius: LETTER_RADIUS,
 	bars: [
 		[5.3, 12, 16, 0],
-		[8.65, 8.5, 12, -36.7],
-		[15.35, 8.5, 12, 36.7],
+		[8.65, 9.4, 10.59, -39.3],
+		[15.35, 9.4, 10.59, 39.3],
 		[18.7, 12, 16, 0],
 	],
 };
@@ -38,6 +48,7 @@ const M: Frame = {
 /** Stem, then the three arms top to bottom. */
 const E: Frame = {
 	width: LETTER_WIDTH,
+	radius: LETTER_RADIUS,
 	bars: [
 		[5.8, 12, 16, 0],
 		[11.9, 5.3, 12.2, 90],
@@ -49,10 +60,11 @@ const E: Frame = {
 /** The diagonal is two bars end to end, since there are four to place. */
 const Z: Frame = {
 	width: LETTER_WIDTH,
+	radius: LETTER_RADIUS,
 	bars: [
-		[9.15, 14.7, 8.2, 46.6],
+		[9.15, 14.7, 9.4, 46.6],
 		[12, 5.3, 14, 90],
-		[14.85, 9.3, 8.2, 46.6],
+		[14.85, 9.3, 9.4, 46.6],
 		[12, 18.7, 14, 90],
 	],
 };
@@ -60,6 +72,7 @@ const Z: Frame = {
 /** Four sides of a ring, meeting at the corners. */
 const O: Frame = {
 	width: LETTER_WIDTH,
+	radius: LETTER_RADIUS,
 	bars: [
 		[6.3, 12, 16, 0],
 		[12, 5.3, 11.4, 90],
@@ -72,15 +85,19 @@ const FRAMES = [REST, M, E, Z, O];
 
 export function LogoThinking({
 	className,
-	intervalMs = 1100,
+	intervalMs = 620,
+	pinnedFrame,
 }: {
 	className?: string;
 	/** How long each frame is held, the morph into it included. */
 	intervalMs?: number;
+	/** Holds one frame instead of cycling. For looking at a shape, not for use. */
+	pinnedFrame?: number;
 }) {
 	const [index, setIndex] = useState(0);
 
 	useEffect(() => {
+		if (pinnedFrame !== undefined) return;
 		// Reduced motion keeps the resting bars: the mark is decoration, and the
 		// state it stands for is announced by the label beside it.
 		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -90,11 +107,13 @@ export function LogoThinking({
 			intervalMs,
 		);
 		return () => clearInterval(id);
-	}, [intervalMs]);
+	}, [intervalMs, pinnedFrame]);
 
-	const frame = FRAMES[index] ?? REST;
-	const morphMs = Math.round(intervalMs * 0.45);
-	const transition = ["x", "y", "width", "height", "transform"]
+	const frame = FRAMES[pinnedFrame ?? index] ?? REST;
+	// Most of the frame is the move, with just enough held at the end to read the
+	// letter. Slower than this and four bars sliding is all you see.
+	const morphMs = Math.round(intervalMs * 0.7);
+	const transition = ["x", "y", "width", "height", "rx", "transform"]
 		.map((property) => `${property} ${morphMs}ms var(--ease-out-quint)`)
 		.join(", ");
 
@@ -120,9 +139,10 @@ export function LogoThinking({
 					<rect
 						height={length}
 						key={restingBar[0]}
-						rx="1"
+						rx={frame.radius}
 						style={{
 							height: `${length}px`,
+							rx: `${frame.radius}px`,
 							transform: `rotate(${rotation}deg)`,
 							transformBox: "fill-box",
 							transformOrigin: "center",

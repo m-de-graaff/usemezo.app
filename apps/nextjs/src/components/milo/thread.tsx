@@ -285,9 +285,15 @@ const AssistantMessage: FC = () => {
 						s.message.status?.type === "running" && s.message.parts.length === 0
 					}
 				>
-					<span className="inline-flex" role="status">
+					<span className="inline-flex items-center gap-2" role="status">
 						<span className="sr-only">Milo is thinking</span>
-						<LogoThinking className="size-5" />
+						<LogoThinking className="size-5 text-muted-foreground" />
+						<span
+							aria-hidden
+							className="shimmer font-medium text-muted-foreground text-sm [--shimmer-spread:3ch]"
+						>
+							Thinking
+						</span>
 					</span>
 				</AuiIf>
 				<MessageError />

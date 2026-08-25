@@ -22,6 +22,32 @@ export default function DebugPage() {
 
 			<section className="flex flex-col gap-4">
 				<h2 className="font-medium text-sm">
+					As Milo renders it while thinking
+				</h2>
+				<div className="flex items-center rounded-xl border border-border/60 bg-card p-10">
+					<span className="inline-flex items-center gap-2">
+						<LogoThinking className="size-5 text-muted-foreground" />
+						<span className="shimmer font-medium text-muted-foreground text-sm [--shimmer-spread:3ch]">
+							Thinking
+						</span>
+					</span>
+				</div>
+			</section>
+
+			<section className="flex flex-col gap-4">
+				<h2 className="font-medium text-sm">Every frame, held</h2>
+				<div className="flex items-center justify-between rounded-xl border border-border/60 bg-card p-10">
+					{["bars", "m", "e", "z", "o"].map((label, frame) => (
+						<div className="flex flex-col items-center gap-3" key={label}>
+							<LogoThinking className="size-20" pinnedFrame={frame} />
+							<span className="text-muted-foreground text-xs">{label}</span>
+						</div>
+					))}
+				</div>
+			</section>
+
+			<section className="flex flex-col gap-4">
+				<h2 className="font-medium text-sm">
 					At the sizes it actually renders
 				</h2>
 				<div className="flex items-end gap-8 rounded-xl border border-border/60 bg-card p-10">
