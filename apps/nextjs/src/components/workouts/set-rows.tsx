@@ -172,11 +172,18 @@ export function SetRows<T extends PlannedSet>({
 									}
 									value={type ?? WORKING}
 								>
-									<DropdownMenuRadioItem value={WORKING}>
+									{/* Radio items keep the menu open by default, which here would
+									    leave it covering the next set's row. One choice, then out
+									    of the way. */}
+									<DropdownMenuRadioItem closeOnClick value={WORKING}>
 										Working set
 									</DropdownMenuRadioItem>
 									{SET_TYPES.map((option) => (
-										<DropdownMenuRadioItem key={option} value={option}>
+										<DropdownMenuRadioItem
+											closeOnClick
+											key={option}
+											value={option}
+										>
 											{SET_TYPE[option].label}
 										</DropdownMenuRadioItem>
 									))}
