@@ -22,7 +22,7 @@ import {
 } from "@mezo/ui/select";
 import { useId, useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { parseDay, trainingVolume } from "~/components/dashboard/data";
+import { type DayPoint, parseDay } from "~/components/dashboard/data";
 import { Delta } from "~/components/dashboard/delta";
 
 const RANGES = [
@@ -40,12 +40,12 @@ const formatTick = (isoDate: string, days: number) =>
 		...(days <= 7 ? { weekday: "short" } : { day: "numeric", month: "short" }),
 	});
 
-export function TrainingVolumeChart() {
+export function TrainingVolumeChart({ rows: all }: { rows: DayPoint[] }) {
 	// `useId` contains colons, which are not valid in an SVG fragment reference.
 	const gradientId = `training-volume-${useId().replace(/:/g, "")}`;
 	const [days, setDays] = useState(30);
 
-	const rows = useMemo(() => trainingVolume.slice(-days), [days]);
+	const rows = useMemo(() => all.slice(-days), [all, days]);
 	const change = useMemo(() => {
 		const first = rows[0]?.value ?? 0;
 		const last = rows.at(-1)?.value ?? 0;

@@ -1,4 +1,3 @@
-import { Badge } from "@mezo/ui/badge";
 import {
 	Card,
 	CardContent,
@@ -14,79 +13,90 @@ import {
 	TableHeader,
 	TableRow,
 } from "@mezo/ui/table";
+import Link from "next/link";
+import type { WorkoutSummary } from "~/components/workouts/history-list";
 import {
-	parseDay,
-	recentWorkouts,
-	type Workout,
-} from "~/components/dashboard/data";
+	formatDay,
+	formatDuration,
+	formatVolume,
+} from "~/components/workouts/summary";
+import { unitSystem } from "~/lib/measure";
 
-const STATE: Record<
-	Workout["state"],
-	{ label: string; variant: "secondary" | "outline" | "destructive" }
-> = {
-	completed: { label: "Done", variant: "secondary" },
-	partial: { label: "Cut short", variant: "destructive" },
-	planned: { label: "Planned", variant: "outline" },
-};
+/**
+ * The last few sessions, from the workout tables.
+ *
+ * There is no status column any more. A stored session is finished or it is
+ * still in progress and not in this list at all; "planned" was a state the
+ * mock data invented and nothing produces.
+ */
+export function RecentWorkouts({
+	units,
+	workouts,
+}: {
+	units: string | null | undefined;
+	workouts: WorkoutSummary[];
+}) {
+	const system = unitSystem(units);
 
-const formatDay = (isoDate: string) =>
-	parseDay(isoDate).toLocaleDateString("en-GB", {
-		day: "numeric",
-		month: "short",
-	});
-
-export function RecentWorkouts() {
 	return (
 		<Card className="gap-0 shadow-none sm:col-span-2 dark:ring-0">
 			<CardHeader className="border-b pb-4">
 				<CardTitle>Recent workouts</CardTitle>
-				<CardDescription>Your last four sessions.</CardDescription>
+				<CardDescription>
+					{workouts.length
+						? `Your last ${workouts.length === 1 ? "session" : `${workouts.length} sessions`}.`
+						: "Nothing logged yet."}
+				</CardDescription>
 			</CardHeader>
 			<CardContent className="p-0">
-				<Table>
-					<TableHeader>
-						<TableRow className="hover:bg-transparent">
-							<TableHead className="pl-6">Session</TableHead>
-							<TableHead className="hidden sm:table-cell">Focus</TableHead>
-							<TableHead className="text-right">Volume</TableHead>
-							<TableHead className="text-right">Time</TableHead>
-							<TableHead className="pr-6 text-right">Status</TableHead>
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{recentWorkouts.map((workout) => (
-							<TableRow
-								className="h-14 hover:bg-transparent"
-								key={workout.date}
-							>
-								<TableCell className="pl-6">
-									<span className="font-medium">{workout.name}</span>
-									<span className="block text-muted-foreground text-xs">
-										{formatDay(workout.date)}
-									</span>
-								</TableCell>
-								<TableCell className="hidden max-w-40 sm:table-cell">
-									<span className="line-clamp-1 text-muted-foreground text-sm">
-										{workout.focus}
-									</span>
-								</TableCell>
-								<TableCell className="text-right text-sm tabular-nums">
-									{workout.volumeKg
-										? `${workout.volumeKg.toLocaleString("en-GB")} kg`
-										: "n/a"}
-								</TableCell>
-								<TableCell className="text-right text-muted-foreground text-sm tabular-nums">
-									{workout.durationMinutes}m
-								</TableCell>
-								<TableCell className="pr-6 text-right">
-									<Badge variant={STATE[workout.state].variant}>
-										{STATE[workout.state].label}
-									</Badge>
-								</TableCell>
+				{workouts.length === 0 ? (
+					<p className="px-6 py-8 text-center text-muted-foreground text-sm">
+						<Link className="underline underline-offset-4" href="/workouts">
+							Log your first workout
+						</Link>{" "}
+						and it will show up here.
+					</p>
+				) : (
+					<Table>
+						<TableHeader>
+							<TableRow className="hover:bg-transparent">
+								<TableHead className="pl-6">Session</TableHead>
+								<TableHead className="text-right">Volume</TableHead>
+								<TableHead className="text-right">Sets</TableHead>
+								<TableHead className="pr-6 text-right">Time</TableHead>
 							</TableRow>
-						))}
-					</TableBody>
-				</Table>
+						</TableHeader>
+						<TableBody>
+							{workouts.map((workout) => (
+								<TableRow
+									className="h-14 hover:bg-transparent"
+									key={workout.id}
+								>
+									<TableCell className="pl-6">
+										<Link
+											className="font-medium underline-offset-4 hover:underline"
+											href={`/workouts/${workout.id}`}
+										>
+											{workout.name}
+										</Link>
+										<span className="block text-muted-foreground text-xs">
+											{formatDay(workout.startedAt)}
+										</span>
+									</TableCell>
+									<TableCell className="text-right text-sm tabular-nums">
+										{formatVolume(workout.volumeKg, system)}
+									</TableCell>
+									<TableCell className="text-right text-sm tabular-nums">
+										{workout.setCount}
+									</TableCell>
+									<TableCell className="pr-6 text-right text-muted-foreground text-sm tabular-nums">
+										{formatDuration(workout.durationSec)}
+									</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
+				)}
 			</CardContent>
 		</Card>
 	);
