@@ -5,7 +5,10 @@ import {
 	doneSetCount,
 	dropUnfinished,
 	encodeCursor,
+	insertIntoSuperset,
 	isoDay,
+	moveExerciseNextTo,
+	moveIntoSuperset,
 	newKey,
 	normaliseSupersets,
 	routineExercises,
@@ -76,31 +79,170 @@ test("a set with no numbers contributes no volume", () => {
 	);
 });
 
-test("superset ids are re-issued per consecutive run", () => {
+test("a consecutive run is left exactly as it is", () => {
 	const joined = normaliseSupersets([
 		{ key: "a", supersetId: "x" },
 		{ key: "b", supersetId: "x" },
 		{ key: "c", supersetId: "x" },
 	]);
-	// One run, one id, all three still together.
-	assert.equal(new Set(joined.map((entry) => entry.supersetId)).size, 1);
+	assert.deepEqual(
+		joined.map((entry) => entry.supersetId),
+		["x", "x", "x"],
+	);
+});
 
-	// A gap in the middle splits the run in two, and the halves must not share
-	// an id, or the screen would draw them as one group with a hole in it.
-	const split = normaliseSupersets([
+test("a superset of one survives, because that is how one starts", () => {
+	const seed = normaliseSupersets([
+		{ key: "a", supersetId: "x" },
+		{ key: "b" },
+	]);
+	assert.equal(seed[0]?.supersetId, "x");
+	assert.equal(seed[1]?.supersetId, undefined);
+});
+
+test("an exercise moved inside a superset joins it", () => {
+	// The single-pointer alternative to dragging: move a row in with the arrows
+	// and it is in.
+	const absorbed = normaliseSupersets([
 		{ key: "a", supersetId: "x" },
 		{ key: "b" },
 		{ key: "c", supersetId: "x" },
+	]);
+	assert.deepEqual(
+		absorbed.map((entry) => entry.supersetId),
+		["x", "x", "x"],
+	);
+});
+
+test("members pulled apart become two supersets, not one with a hole", () => {
+	const split = normaliseSupersets([
+		{ key: "a", supersetId: "x" },
+		{ key: "b" },
+		{ key: "c" },
 		{ key: "d", supersetId: "x" },
 	]);
-	assert.equal(
-		split[0]?.supersetId,
-		undefined,
-		"a run of one is not a superset",
-	);
+	// Two unassigned rows in the gap is a move out, not a move in.
 	assert.equal(split[1]?.supersetId, undefined);
-	assert.equal(split[2]?.supersetId, split[3]?.supersetId);
-	assert.notEqual(split[2]?.supersetId, "x");
+	assert.equal(split[2]?.supersetId, undefined);
+	assert.equal(split[0]?.supersetId, "x", "the first run keeps the id");
+	assert.notEqual(split[3]?.supersetId, "x");
+	assert.notEqual(split[3]?.supersetId, undefined);
+});
+
+test("an exercise dragged into a superset lands at the end of it", () => {
+	const moved = moveIntoSuperset(
+		[
+			{ key: "a", supersetId: "x" },
+			{ key: "b", supersetId: "x" },
+			{ key: "c" },
+			{ key: "d" },
+		],
+		"x",
+		"d",
+	);
+	// Spliced in after the last member, not left where it was: a superset is
+	// exercises done back to back.
+	assert.deepEqual(
+		moved.map((entry) => entry.key),
+		["a", "b", "d", "c"],
+	);
+	assert.equal(moved[2]?.supersetId, "x");
+});
+
+test("a drop that means nothing changes nothing", () => {
+	const list = [{ key: "a", supersetId: "x" }, { key: "b" }];
+	// Already in the group, an unknown key, and an unknown group.
+	assert.equal(moveIntoSuperset(list, "x", "a"), list);
+	assert.equal(moveIntoSuperset(list, "x", "nope"), list);
+	assert.equal(moveIntoSuperset(list, "nope", "b"), list);
+});
+
+test("a picked exercise is inserted into the group, not appended to the list", () => {
+	const added = insertIntoSuperset(
+		[{ key: "a", supersetId: "x" }, { key: "b" }],
+		"x",
+		{ key: "c" },
+	);
+	assert.deepEqual(
+		added.map((entry) => entry.key),
+		["a", "c", "b"],
+	);
+	assert.equal(added[1]?.supersetId, "x");
+});
+
+test("dragging one exercise onto another reorders the list", () => {
+	const list = [{ key: "a" }, { key: "b" }, { key: "c" }];
+	assert.deepEqual(
+		moveExerciseNextTo(list, "c", "a", false).map((entry) => entry.key),
+		["c", "a", "b"],
+	);
+	assert.deepEqual(
+		moveExerciseNextTo(list, "a", "c", true).map((entry) => entry.key),
+		["b", "c", "a"],
+	);
+	// Onto itself, or onto a row that is not there, is a no-op.
+	assert.equal(moveExerciseNextTo(list, "a", "a", true), list);
+	assert.equal(moveExerciseNextTo(list, "a", "nope", true), list);
+});
+
+test("where it lands decides what it belongs to", () => {
+	const list = [
+		{ key: "a", supersetId: "x" },
+		{ key: "b", supersetId: "x" },
+		{ key: "c" },
+	];
+	// Dropped between two members, it is in the superset.
+	const inside = moveExerciseNextTo(list, "c", "a", true);
+	assert.deepEqual(
+		inside.map((entry) => entry.key),
+		["a", "c", "b"],
+	);
+	assert.equal(inside[1]?.supersetId, "x");
+
+	// Dragged clear of the group it shared, it leaves it behind.
+	const outside = moveExerciseNextTo(list, "b", "c", true);
+	assert.deepEqual(
+		outside.map((entry) => entry.key),
+		["a", "c", "b"],
+	);
+	assert.equal(outside[2]?.supersetId, undefined);
+});
+
+test("a superset of one keeps its group when it is only being moved", () => {
+	// The seed of an empty superset is a frame waiting to be filled. Dragging it
+	// up the list must not quietly dissolve it.
+	const moved = moveExerciseNextTo(
+		[{ key: "a" }, { key: "b" }, { key: "seed", supersetId: "x" }],
+		"seed",
+		"a",
+		false,
+	);
+	assert.deepEqual(
+		moved.map((entry) => entry.key),
+		["seed", "a", "b"],
+	);
+	assert.equal(moved[0]?.supersetId, "x");
+});
+
+test("reordering inside a superset keeps everyone in it", () => {
+	const shuffled = moveExerciseNextTo(
+		[
+			{ key: "a", supersetId: "x" },
+			{ key: "b", supersetId: "x" },
+			{ key: "c" },
+		],
+		"a",
+		"b",
+		true,
+	);
+	assert.deepEqual(
+		shuffled.map((entry) => entry.key),
+		["b", "a", "c"],
+	);
+	assert.deepEqual(
+		shuffled.slice(0, 2).map((entry) => entry.supersetId),
+		["x", "x"],
+	);
 });
 
 test("runs group consecutive members and nothing else", () => {

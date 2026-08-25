@@ -3,6 +3,9 @@
 import { type Exercise, exerciseById } from "@mezo/api/exercises";
 import {
 	doneSetCount,
+	insertIntoSuperset,
+	moveExerciseNextTo,
+	moveIntoSuperset,
 	newKey,
 	normaliseSupersets,
 	supersetRuns,
@@ -17,9 +20,16 @@ import { useEffect, useRef, useState } from "react";
 import { Elapsed } from "~/components/workouts/elapsed";
 import { ExercisePicker } from "~/components/workouts/exercise-picker";
 import { ExerciseThumb } from "~/components/workouts/exercise-thumb";
-import { SetRows } from "~/components/workouts/set-rows";
+import { RestFields } from "~/components/workouts/rest-fields";
+import { ExercisePlan, SetRows } from "~/components/workouts/set-rows";
 import { formatVolume } from "~/components/workouts/summary";
-import { SupersetGroup } from "~/components/workouts/superset";
+import {
+	DragHandle,
+	Reorderable,
+	SupersetDropZone,
+	SupersetGroup,
+	supersetLabel,
+} from "~/components/workouts/superset";
 import { unitSystem } from "~/lib/measure";
 import { api } from "~/trpc/react";
 
@@ -115,26 +125,36 @@ export function LiveWorkout({
 			{ key: newKey(), exerciseId: exercise.id, sets: [] },
 		]);
 
-	// Joining is always with the exercise above, because a superset is exercises
-	// done back to back and a pair of neighbours is the only thing a flat list
-	// can express. The button is absent on the first row for the same reason.
+	// One exercise on its own is a superset. It is the empty frame you then drop
+	// the other half into, and until you do, nothing else on the screen changes.
 	const toggleSuperset = (index: number) =>
-		setExercises((current) => {
-			const entry = current[index];
-			const previous = current[index - 1];
-			if (!entry || !previous) return current;
-			const joined =
-				entry.supersetId !== undefined &&
-				entry.supersetId === previous.supersetId;
-			const supersetId = joined ? undefined : (previous.supersetId ?? newKey());
-			return normaliseSupersets(
-				current.map((item, i) => {
-					if (i === index) return { ...item, supersetId };
-					if (i === index - 1 && !joined) return { ...item, supersetId };
-					return item;
-				}),
-			);
-		});
+		setExercises((current) =>
+			normaliseSupersets(
+				current.map((item, i) =>
+					i === index
+						? {
+								...item,
+								supersetId:
+									item.supersetId === undefined ? newKey() : undefined,
+							}
+						: item,
+				),
+			),
+		);
+
+	/** Dragged in, or picked out of the tile's "move one you already have". */
+	const moveInto = (supersetId: string, key: string) =>
+		setExercises((current) => moveIntoSuperset(current, supersetId, key));
+
+	/** A new exercise, straight into the group whose tile was tapped. */
+	const addInto = (supersetId: string, exercise: Exercise) =>
+		setExercises((current) =>
+			insertIntoSuperset(current, supersetId, {
+				key: newKey(),
+				exerciseId: exercise.id,
+				sets: [],
+			}),
+		);
 
 	const patch = (key: string, sets: WorkoutExercise["sets"]) =>
 		setExercises((current) =>
@@ -155,6 +175,20 @@ export function LiveWorkout({
 			),
 		);
 
+	/** Anything on the entry that is not its sets: the rest timers, for now. */
+	const patchEntry = (key: string, fields: Partial<WorkoutExercise>) =>
+		setExercises((current) =>
+			current.map((entry) =>
+				entry.key === key ? { ...entry, ...fields } : entry,
+			),
+		);
+
+	/** Dropped onto another card, which is the other half of the same drag. */
+	const reorder = (key: string, targetKey: string, after: boolean) =>
+		setExercises((current) =>
+			moveExerciseNextTo(current, key, targetKey, after),
+		);
+
 	const drop = (key: string) =>
 		setExercises((current) =>
 			// Removing the middle of a superset leaves two exercises that are no
@@ -169,28 +203,29 @@ export function LiveWorkout({
 	const card = (entry: WorkoutExercise, index: number) => {
 		const exercise = exerciseById(entry.exerciseId);
 		const label = exercise?.name ?? "this exercise";
-		const previous = exercises[index - 1];
-		const joined =
-			entry.supersetId !== undefined &&
-			entry.supersetId === previous?.supersetId;
+		const grouped = entry.supersetId !== undefined;
 
 		return (
-			<li className="rounded-xl border bg-card p-4" key={entry.key}>
+			<Reorderable
+				entryKey={entry.key}
+				key={entry.key}
+				onMove={(key, after) => reorder(key, entry.key, after)}
+			>
 				<div className="mb-3 flex items-center gap-2">
+					<DragHandle entryKey={entry.key} name={label} />
 					<ExerciseThumb exerciseId={entry.exerciseId} />
 					<p className="min-w-0 flex-1 truncate font-medium capitalize">
 						{exercise?.name ?? "Unknown exercise"}
 					</p>
 					<Button
 						aria-label={
-							joined
+							grouped
 								? `Take ${label} out of its superset`
-								: `Superset ${label} with the exercise above`
+								: `Make ${label} a superset`
 						}
-						disabled={index === 0}
 						onClick={() => toggleSuperset(index)}
 						size="icon-sm"
-						variant={joined ? "secondary" : "ghost"}
+						variant={grouped ? "secondary" : "ghost"}
 					>
 						<Link2Icon aria-hidden="true" />
 					</Button>
@@ -203,6 +238,7 @@ export function LiveWorkout({
 						<TrashIcon aria-hidden="true" />
 					</Button>
 				</div>
+				<ExercisePlan note={entry.note} />
 				<SetRows
 					exerciseName={label}
 					onChange={(sets) => patch(entry.key, sets)}
@@ -210,7 +246,13 @@ export function LiveWorkout({
 					sets={entry.sets}
 					system={system}
 				/>
-			</li>
+				<RestFields
+					exerciseName={label}
+					onChange={(rest) => patchEntry(entry.key, rest)}
+					restAfterSec={entry.restAfterSec}
+					restSec={entry.restSec}
+				/>
+			</Reorderable>
 		);
 	};
 
@@ -221,10 +263,19 @@ export function LiveWorkout({
 	let group = 0;
 	const rows = supersetRuns(exercises).flatMap((run) => {
 		const cards = run.entries.map((entry) => card(entry, flat++));
-		if (run.entries.length < 2) return cards;
+		const id = run.id;
+		if (id === undefined) return cards;
+
+		const label = supersetLabel(group);
 		return (
-			<SupersetGroup index={group++} key={run.id} size={run.entries.length}>
+			<SupersetGroup index={group++} key={id} size={run.entries.length}>
 				{cards}
+				<SupersetDropZone
+					label={label}
+					moveable={exercises.filter((entry) => entry.supersetId !== id)}
+					onMove={(key) => moveInto(id, key)}
+					onPick={(exercise) => addInto(id, exercise)}
+				/>
 			</SupersetGroup>
 		);
 	});

@@ -50,8 +50,23 @@ const entry = {
 	key: z.string().min(1).max(32),
 	exerciseId: z.string().min(1).max(32),
 	note: z.string().max(500).optional(),
-	/** Seconds. Absent means the routine has no opinion and no timer starts. */
+	/**
+	 * Seconds to rest between this exercise's own sets. Absent means the routine
+	 * has no opinion and no timer starts.
+	 */
 	restSec: z.number().int().min(0).max(3600).optional(),
+	/**
+	 * Seconds to rest after the last set of this exercise, before the next one
+	 * begins. The two are different numbers in real training and in every app
+	 * that lets you set them: thirty seconds between sets of curls and two
+	 * minutes before you walk to the rack is one exercise, not two settings of
+	 * the same thing.
+	 *
+	 * Inside a superset it is the rest at the end of the round, which is why it
+	 * reads as "after" rather than "between rounds": the entry it belongs to is
+	 * the one you just finished either way.
+	 */
+	restAfterSec: z.number().int().min(0).max(3600).optional(),
 	/**
 	 * Shared by consecutive entries trained back to back. Held per entry rather
 	 * than as a list of groups, so a reorder cannot leave a group pointing at a
@@ -206,21 +221,147 @@ export function supersetRuns<T extends HasSuperset>(exercises: T[]) {
 }
 
 /**
- * Re-issue every `supersetId` from the runs actually on screen.
+ * Where a group's last member sits, or -1.
  *
- * Run after any reorder, removal or join. Two members separated by a third
- * exercise are two groups that happen to share a stale id, and a member left on
- * its own is not a superset at all. Deriving the ids from position rather than
- * patching them per mutation makes every one of those the same case.
+ * A hand-rolled scan rather than `findLastIndex`, which needs a newer lib
+ * target than this package compiles against.
+ */
+function lastIndexOfSuperset(
+	exercises: HasSuperset[],
+	supersetId: string,
+): number {
+	for (let index = exercises.length - 1; index >= 0; index -= 1) {
+		if (exercises[index]?.supersetId === supersetId) return index;
+	}
+	return -1;
+}
+
+/**
+ * Put an exercise already in the list into a superset.
+ *
+ * It is spliced onto the end of the group rather than left where it was: a
+ * superset is exercises done back to back, so a member the list draws somewhere
+ * else is a group that is not what it says it is.
+ *
+ * An unknown key, an unknown group, or an exercise already in that group all
+ * return the list untouched, so a stray drop is a no-op rather than an error.
+ */
+export function moveIntoSuperset<T extends HasSuperset & { key: string }>(
+	exercises: T[],
+	supersetId: string,
+	key: string,
+): T[] {
+	const moving = exercises.find((entry) => entry.key === key);
+	if (!moving || moving.supersetId === supersetId) return exercises;
+
+	const rest = exercises.filter((entry) => entry.key !== key);
+	const last = lastIndexOfSuperset(rest, supersetId);
+	if (last === -1) return exercises;
+
+	const next = [...rest];
+	next.splice(last + 1, 0, { ...moving, supersetId });
+	return normaliseSupersets(next);
+}
+
+/**
+ * Drop one exercise above or below another.
+ *
+ * The same drag that fills a superset tile also reorders the list, so this is
+ * the other half of it. Where the exercise lands decides what it belongs to:
+ * dropped between two members of one group it joins them, and dropped anywhere
+ * else it keeps whatever group it already had. That is the same rule the up and
+ * down buttons follow, so a list reordered either way ends up the same.
+ */
+export function moveExerciseNextTo<T extends HasSuperset & { key: string }>(
+	exercises: T[],
+	key: string,
+	targetKey: string,
+	after: boolean,
+): T[] {
+	if (key === targetKey) return exercises;
+
+	const moving = exercises.find((entry) => entry.key === key);
+	if (!moving) return exercises;
+
+	const rest = exercises.filter((entry) => entry.key !== key);
+	const target = rest.findIndex((entry) => entry.key === targetKey);
+	if (target === -1) return exercises;
+
+	const at = after ? target + 1 : target;
+	const before = rest[at - 1]?.supersetId;
+	const behind = rest[at]?.supersetId;
+	const own = moving.supersetId;
+	// A group it was the only member of is a superset waiting to be filled, not
+	// a group it can be dragged out of.
+	const alone =
+		own !== undefined &&
+		exercises.filter((entry) => entry.supersetId === own).length === 1;
+
+	let supersetId: string | undefined;
+	if (before !== undefined && before === behind) {
+		// Landed between two members of one group. That is what joining looks like.
+		supersetId = before;
+	} else if (before === own || behind === own) {
+		// Still touching its own group, so this was a shuffle within it.
+		supersetId = own;
+	} else {
+		supersetId = alone ? own : undefined;
+	}
+
+	const next = [...rest];
+	next.splice(at, 0, { ...moving, supersetId });
+	return normaliseSupersets(next);
+}
+
+/** The same, for an exercise that is not in the list yet. */
+export function insertIntoSuperset<T extends HasSuperset>(
+	exercises: T[],
+	supersetId: string,
+	entry: T,
+): T[] {
+	const last = lastIndexOfSuperset(exercises, supersetId);
+	if (last === -1) return exercises;
+
+	const next = [...exercises];
+	next.splice(last + 1, 0, { ...entry, supersetId });
+	return normaliseSupersets(next);
+}
+
+/**
+ * Settle superset membership after the list has been rearranged.
+ *
+ * Two rules, and between them every reorder, removal, join and drop is the same
+ * case:
+ *
+ * 1. An exercise with no group of its own, sitting between two members of one
+ *    group, is inside that group. Moving a row in with the up and down buttons
+ *    is what makes those buttons a way to join a superset without dragging,
+ *    which SC 2.5.7 requires of anything a drag can do.
+ * 2. Members of one group that are no longer consecutive are no longer one
+ *    group. The first run keeps the id and the rest are re-issued, so a split
+ *    becomes two supersets rather than one drawn with a hole in it.
+ *
+ * A group of one is left alone. That is what a superset looks like the moment
+ * it is created, before anything has been dropped into it.
  */
 export function normaliseSupersets<T extends HasSuperset>(exercises: T[]): T[] {
-	return supersetRuns(exercises).flatMap((run) => {
-		if (run.entries.length < 2 || !run.id) {
-			return run.entries.map((entry) =>
-				entry.supersetId === undefined
-					? entry
-					: { ...entry, supersetId: undefined },
-			);
+	const absorbed = exercises.map((entry, index) => {
+		if (entry.supersetId !== undefined) return entry;
+		const before = exercises[index - 1]?.supersetId;
+		const after = exercises[index + 1]?.supersetId;
+		return before !== undefined && before === after
+			? { ...entry, supersetId: before }
+			: entry;
+	});
+
+	// Ids are kept rather than always re-minted, so a reorder that changes
+	// nothing about the grouping writes the same document back.
+	const used = new Set<string>();
+	return supersetRuns(absorbed).flatMap((run) => {
+		if (run.id === undefined) return run.entries;
+		if (!used.has(run.id)) {
+			used.add(run.id);
+			return run.entries;
 		}
 		const id = newKey();
 		return run.entries.map((entry) => ({ ...entry, supersetId: id }));

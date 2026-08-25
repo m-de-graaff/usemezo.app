@@ -4,6 +4,7 @@ import {
 	BODY_PARTS,
 	EQUIPMENT,
 	type Exercise,
+	exerciseById,
 	MEDIA_ATTRIBUTION,
 	searchExercises,
 } from "@mezo/api/exercises";
@@ -34,9 +35,19 @@ const RESULTS = 60;
  * case, and closing after each one means six trips through the same sheet.
  */
 export function ExercisePicker({
+	moveable,
+	onMove,
 	onPick,
 	trigger,
 }: {
+	/**
+	 * Exercises already in the list, offered as a move rather than an add.
+	 *
+	 * Only the superset tile passes these, and it is what makes dragging one in
+	 * optional rather than the only way (SC 2.5.7).
+	 */
+	moveable?: { exerciseId: string; key: string }[];
+	onMove?: (key: string) => void;
 	onPick: (exercise: Exercise) => void;
 	/** The control that opens the sheet. Rendered as the trigger itself. */
 	trigger: ReactElement;
@@ -87,6 +98,33 @@ export function ExercisePicker({
 						value={equipment}
 					/>
 				</div>
+
+				{moveable && moveable.length > 0 && onMove && (
+					<div className="border-t">
+						<p className="px-4 pt-3 pb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+							Move one you already have
+						</p>
+						<ul className="max-h-48 overflow-y-auto pb-2">
+							{moveable.map((entry) => {
+								const exercise = exerciseById(entry.exerciseId);
+								return (
+									<li key={entry.key}>
+										<button
+											className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+											onClick={() => onMove(entry.key)}
+											type="button"
+										>
+											<ExerciseThumb exerciseId={entry.exerciseId} />
+											<span className="min-w-0 truncate font-medium text-sm capitalize">
+												{exercise?.name ?? "Unknown exercise"}
+											</span>
+										</button>
+									</li>
+								);
+							})}
+						</ul>
+					</div>
+				)}
 
 				<ul className="min-h-0 flex-1 overflow-y-auto border-t">
 					{results.map((exercise) => (
