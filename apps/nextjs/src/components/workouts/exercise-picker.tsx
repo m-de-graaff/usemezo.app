@@ -148,11 +148,8 @@ function ChipRow({
 	value: string | undefined;
 }) {
 	return (
-		<div
-			aria-label={label}
-			className="flex gap-1 overflow-x-auto pb-1"
-			role="group"
-		>
+		<fieldset className="flex min-w-0 gap-1 overflow-x-auto pb-1">
+			<legend className="sr-only">{label}</legend>
 			{options.map((option) => {
 				const on = option === value;
 				return (
@@ -172,6 +169,6 @@ function ChipRow({
 					</button>
 				);
 			})}
-		</div>
+		</fieldset>
 	);
 }

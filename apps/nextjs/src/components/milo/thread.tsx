@@ -29,6 +29,7 @@ import {
 	SquareIcon,
 } from "lucide-react";
 import type { FC } from "react";
+import { LogoThinking } from "~/components/logo-thinking";
 import { MarkdownText } from "~/components/milo/markdown-text";
 import { ToolFallback } from "~/components/milo/tool-fallback";
 import { TooltipIconButton } from "~/components/milo/tooltip-icon-button";
@@ -284,9 +285,9 @@ const AssistantMessage: FC = () => {
 						s.message.status?.type === "running" && s.message.parts.length === 0
 					}
 				>
-					<span className="animate-pulse font-sans" role="status">
+					<span className="inline-flex" role="status">
 						<span className="sr-only">Milo is thinking</span>
-						<span aria-hidden>{"●"}</span>
+						<LogoThinking className="size-5" />
 					</span>
 				</AuiIf>
 				<MessageError />

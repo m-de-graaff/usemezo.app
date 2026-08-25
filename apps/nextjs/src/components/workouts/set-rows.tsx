@@ -84,8 +84,11 @@ export function SetRows<T extends PlannedSet>({
 				return (
 					<div
 						className="grid items-center gap-2 py-1"
-						// The index is the key, and here that is correct: these rows are
-						// only ever appended to or truncated from the end, never reordered.
+						// Sets are only ever appended to or truncated from the end, never
+						// reordered or spliced from the middle, so a row's index is stable
+						// for its whole life. Giving every set an id of its own would mean
+						// carrying one in the stored document for a list nobody can reorder.
+						// biome-ignore lint/suspicious/noArrayIndexKey: append-only list
 						key={index}
 						style={{ gridTemplateColumns: columns }}
 					>
