@@ -86,6 +86,9 @@ export type Target = {
 export const dailyTargets: Target[] = [
 	{ label: "Calories", current: 2140, goal: 2600, unit: "kcal" },
 	{ label: "Protein", current: 168, goal: 180, unit: "g" },
+	// Real on /hydration, still invented here: this card is rendered on the
+	// server and the hydration total is keyed to the reader's local day, which
+	// the server does not know. Wire it up when this card becomes a client one.
 	{ label: "Water", current: 2.1, goal: 3, unit: "L" },
 	{ label: "Steps", current: 9420, goal: 8000, unit: "" },
 ];

@@ -12,9 +12,12 @@
  * calorie target is worse than an absent one. So `buildPlan` either has what
  * it needs or reports what it is missing.
  *
- * No imports: it is called from a Server Component, a Client Component and a
- * test, and it depends on nothing that would stop it running in any of them.
+ * One import, and it is another file with this same rule: called from a Server
+ * Component, a Client Component and a test, depending on nothing that would
+ * stop it running in any of them.
  */
+
+import { baseTargetMl } from "./hydration.ts";
 
 /**
  * How much a day burns beyond resting, by how the user described their week.
@@ -67,8 +70,6 @@ const KCAL_PER_G = { protein: 4, carbs: 4, fat: 9 };
 const FAT_SHARE = 0.25;
 /** Roughly what a kilogram of body mass is worth, for turning a gap into time. */
 const KCAL_PER_KG = 7700;
-/** Millilitres of water per kilogram of body weight. */
-const WATER_ML_PER_KG = 35;
 /** The upper end of the healthy BMI band, used to cap the protein target. */
 const HEALTHY_BMI_MAX = 25;
 
@@ -116,6 +117,86 @@ export type Plan =
 			/** Weeks to `targetWeightKg` at that pace, when one was given and is ahead. */
 			weeksToTarget: number | null;
 	  };
+
+/* -------------------------------------------------------------------------- */
+/* Body composition                                                           */
+/* -------------------------------------------------------------------------- */
+
+export type BodyCompositionInput = {
+	weightKg?: number | null;
+	bodyFatMassKg?: number | null;
+	bodyFatPercent?: number | null;
+	boneMassKg?: number | null;
+	totalBodyWaterKg?: number | null;
+	extracellularWaterKg?: number | null;
+};
+
+export type BodyComposition = {
+	/** Everything that is not fat. Weight less fat mass, by definition. */
+	fatFreeMassKg: number | null;
+	/** Fat free mass less bone. What a scan calls soft lean mass. */
+	softLeanMassKg: number | null;
+	/** The water inside the cells: whatever the total is not outside them. */
+	intracellularWaterKg: number | null;
+	/**
+	 * Extracellular water as a share of the total, 0 to 1.
+	 *
+	 * The number a clinician reads rather than either water figure on its own.
+	 * Roughly 0.36 to 0.39 is ordinary; higher tends to mean fluid retention,
+	 * inflammation or a bad reading, and none of those are training news.
+	 */
+	extracellularRatio: number | null;
+};
+
+/**
+ * The parts of a body composition scan that are arithmetic on the rest.
+ *
+ * A scan prints a dozen numbers and most of them are the same four measurements
+ * rearranged: fat free mass *is* weight minus fat mass, soft lean mass *is*
+ * fat free mass minus bone, intracellular water *is* the total minus the
+ * extracellular part. Storing those alongside their own inputs would mean four
+ * columns that can disagree with each other the first time somebody updates
+ * their weight and not the rest, and a profile that contradicts itself is worse
+ * than one that is missing a row.
+ *
+ * So they are computed here, from whatever is stored, every time they are read.
+ * `null` where the inputs are not there — the rule the whole module follows.
+ *
+ * Fat mass is taken from the stored mass where there is one and from the
+ * percentage otherwise, because a scale reports one, the other, or both.
+ */
+export function bodyComposition(input: BodyCompositionInput): BodyComposition {
+	const weight = input.weightKg ?? null;
+
+	const fatMass =
+		input.bodyFatMassKg ??
+		(weight && input.bodyFatPercent
+			? (weight * input.bodyFatPercent) / 100
+			: null);
+
+	const fatFreeMassKg = weight && fatMass ? round1(weight - fatMass) : null;
+
+	const softLeanMassKg =
+		fatFreeMassKg && input.boneMassKg
+			? round1(fatFreeMassKg - input.boneMassKg)
+			: null;
+
+	const total = input.totalBodyWaterKg ?? null;
+	const outside = input.extracellularWaterKg ?? null;
+
+	// A guard, not a formality: an extracellular figure above the total is a
+	// mistyped or mismatched reading, and the subtraction would report negative
+	// water rather than saying so.
+	const consistent = total !== null && outside !== null && outside <= total;
+
+	return {
+		fatFreeMassKg,
+		softLeanMassKg,
+		intracellularWaterKg: consistent ? round1(total - outside) : null,
+		extracellularRatio:
+			consistent && total > 0 ? round2(outside / total) : null,
+	};
+}
 
 /**
  * Whole years, counted the way a person counts them: the birthday itself
@@ -233,7 +314,9 @@ export function buildPlan(input: PlanInput, today = new Date()): Plan {
 		protein,
 		carbs,
 		fat,
-		waterMl: Math.round((weight * WATER_ML_PER_KG) / 50) * 50,
+		// The same figure the Hydration screen counts against, so the plan and
+		// the tracker cannot drift into quoting two different targets.
+		waterMl: baseTargetMl(weight, gender),
 		paceKgPerWeek,
 		weeksToTarget: weeksToTarget(weight, targetWeightKg, goal, paceKgPerWeek),
 	};

@@ -1,5 +1,6 @@
 "use client";
 
+import { bodyComposition } from "@mezo/api/plan";
 import {
 	type Field,
 	findSection,
@@ -38,6 +39,7 @@ import { LockIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import {
+	displayMeasure,
 	fromDisplay,
 	toDisplay,
 	type UnitSystem,
@@ -174,6 +176,8 @@ export function SettingsForm({
 				))}
 			</div>
 
+			<Derived system={system} values={values} />
+
 			{/* Sticky, so Save is reachable from the middle of a long section
 			    rather than only from the bottom of one. */}
 			<div className="sticky bottom-0 z-10 mt-auto flex items-center gap-3 border-border/60 border-t bg-background/95 py-4 backdrop-blur-sm supports-backdrop-filter:bg-background/80">
@@ -185,6 +189,89 @@ export function SettingsForm({
 				</Button>
 			</div>
 		</form>
+	);
+}
+
+/**
+ * The rest of the scan: the figures that follow from the answers above.
+ *
+ * A bioimpedance device prints a dozen numbers and most of them are the same
+ * few measurements rearranged. Mezo stores the measurements and works the rest
+ * out, so this is the other half of that decision made visible — somebody who
+ * types six values from their scan should be able to see the four that come out
+ * of them, and see that they match the paper in their hand.
+ *
+ * Read-only for the same reason they are not columns: editing one would mean a
+ * profile that contradicts itself. Renders nothing until enough is filled in
+ * for at least one of them to have an answer.
+ */
+function Derived({
+	values,
+	system,
+}: {
+	values: SettingsValues;
+	system: UnitSystem;
+}) {
+	// The form holds every answer as one loose union, because the spec cannot
+	// tell TypeScript which field carries which type. Reading the six numbers
+	// back out is where that has to be undone.
+	const number = (name: keyof ProfileInput) =>
+		typeof values[name] === "number" ? values[name] : null;
+
+	const derived = bodyComposition({
+		weightKg: number("weightKg"),
+		bodyFatMassKg: number("bodyFatMassKg"),
+		bodyFatPercent: number("bodyFatPercent"),
+		boneMassKg: number("boneMassKg"),
+		totalBodyWaterKg: number("totalBodyWaterKg"),
+		extracellularWaterKg: number("extracellularWaterKg"),
+	});
+
+	const mass = (value: number | null) =>
+		value === null ? null : displayMeasure(value, "mass", system);
+
+	const rows = [
+		{ label: "Fat free mass", parts: mass(derived.fatFreeMassKg) },
+		{ label: "Soft lean mass", parts: mass(derived.softLeanMassKg) },
+		{ label: "Intracellular water", parts: mass(derived.intracellularWaterKg) },
+		{
+			label: "Water outside the cells",
+			parts:
+				derived.extracellularRatio === null
+					? null
+					: {
+							text: String(Math.round(derived.extracellularRatio * 1000) / 10),
+							unit: "% of total",
+						},
+		},
+	].filter((row) => row.parts !== null);
+
+	if (rows.length === 0) return null;
+
+	return (
+		<section className="mt-8 rounded-xl border border-border/60 p-4">
+			<h2 className="font-medium text-sm">Worked out from the above</h2>
+			<p className="mt-1 text-muted-foreground text-xs leading-relaxed">
+				Your scan prints these too. Mezo does not store them: they follow from
+				your weight, fat mass, bone mass and water, and a saved copy would be
+				the first thing to go stale.
+			</p>
+			<dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+				{rows.map((row) => (
+					<div key={row.label}>
+						<dt className="text-muted-foreground text-xs">{row.label}</dt>
+						<dd className="font-medium text-sm tabular-nums">
+							{row.parts?.text}
+							{row.parts?.unit ? (
+								<span className="ms-1 font-normal text-muted-foreground text-xs">
+									{row.parts.unit}
+								</span>
+							) : null}
+						</dd>
+					</div>
+				))}
+			</dl>
+		</section>
 	);
 }
 

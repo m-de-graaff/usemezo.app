@@ -42,8 +42,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 	return {
 		title: profile.visible
-			? `${profile.name} (@${profile.username}) | Mezo`
-			: `@${profile.username} | Mezo`,
+			? `${profile.name} (@${profile.username})`
+			: `@${profile.username}`,
 		// A private profile must not be indexed, and a public one is the user's
 		// call to share, not ours to advertise.
 		robots: { index: false, follow: false },

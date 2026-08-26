@@ -8,8 +8,11 @@ import { CheckIcon, DumbbellIcon, XIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+import { formatRest } from "~/components/workouts/summary";
+import { VolumeSummary } from "~/components/workouts/volume-summary";
 import {
 	type ProposedRoutine,
+	prescription,
 	proposalToExercises,
 } from "~/lib/routine-proposal";
 import { api } from "~/trpc/react";
@@ -80,26 +83,60 @@ export const RoutineToolUI = makeAssistantToolUI<ProposedRoutine, Result>({
 				<ul className="divide-y">
 					{exercises.map((entry, index) => {
 						const exercise = exerciseById(entry.exerciseId);
+						const detail = prescription(entry);
 						return (
 							<li
-								className="flex items-baseline gap-2 px-4 py-2"
+								className="px-4 py-2"
 								// The proposal carries no keys of its own, and this list is
 								// rendered once and never reordered: by the time it is on
 								// screen it is a record of what was suggested.
 								// biome-ignore lint/suspicious/noArrayIndexKey: static list
 								key={`${entry.exerciseId}-${index}`}
 							>
-								<span className="min-w-0 flex-1 truncate text-sm capitalize">
-									{exercise?.name ?? `Unknown exercise (${entry.exerciseId})`}
-								</span>
-								<span className="shrink-0 text-muted-foreground text-sm tabular-nums">
-									{entry.sets} × {entry.reps}
-									{entry.weightKg ? ` @ ${entry.weightKg} kg` : ""}
-								</span>
+								<div className="flex items-baseline gap-2">
+									<span className="min-w-0 flex-1 truncate text-sm capitalize">
+										{exercise?.name ?? `Unknown exercise (${entry.exerciseId})`}
+									</span>
+									<span className="shrink-0 text-muted-foreground text-sm tabular-nums">
+										{entry.sets} × {entry.reps}
+										{entry.repsMax && entry.repsMax > entry.reps
+											? `-${entry.repsMax}`
+											: ""}
+										{entry.weightKg ? ` @ ${entry.weightKg} kg` : ""}
+									</span>
+								</div>
+								{/* Everything the row above does not already say: the ramp,
+								    which sets go all the way, and the two rest intervals. */}
+								<Detail
+									parts={[
+										detail,
+										entry.warmupSets && entry.weightKg
+											? `${entry.warmupSets} warm-up${entry.warmupSets === 1 ? "" : "s"}`
+											: "",
+										entry.failureSets
+											? entry.failureSets >= entry.sets
+												? "every set to failure"
+												: `last ${entry.failureSets === 1 ? "set" : `${entry.failureSets} sets`} to failure`
+											: "",
+										entry.restSec ? `${formatRest(entry.restSec)} rest` : "",
+										entry.restAfterSec
+											? `${formatRest(entry.restAfterSec)} before the next`
+											: "",
+									]}
+								/>
 							</li>
 						);
 					})}
 				</ul>
+
+				<VolumeSummary
+					className="border-t px-4 py-2.5"
+					exercises={exercises.map((entry) => ({
+						exerciseId: entry.exerciseId,
+						sets: entry.sets,
+					}))}
+					timesPerWeek={args.timesPerWeek ?? 1}
+				/>
 
 				{settled ? (
 					<p className="flex items-center gap-1.5 border-t px-4 py-2.5 text-muted-foreground text-xs">
@@ -155,6 +192,16 @@ export const RoutineToolUI = makeAssistantToolUI<ProposedRoutine, Result>({
 		);
 	},
 });
+
+/** The second line of a row, or nothing when there is nothing to put on it. */
+function Detail({ parts }: { parts: string[] }) {
+	const shown = parts.filter(Boolean);
+	if (shown.length === 0) return null;
+
+	return (
+		<p className="mt-0.5 text-muted-foreground text-xs">{shown.join(" · ")}</p>
+	);
+}
 
 const CardShell = ({ children }: { children: ReactNode }) => (
 	<div className="my-2 overflow-hidden rounded-xl border bg-card text-card-foreground">

@@ -7,6 +7,7 @@ import {
 	jsonb,
 	pgTable,
 	pgTableCreator,
+	primaryKey,
 	real,
 	text,
 	timestamp,
@@ -316,9 +317,24 @@ export const userProfile = pgTable(
 
 		// Goals and activity
 		goals: text("goals").array(),
+		/**
+		 * Whether a session started from a routine gets its weights raised from
+		 * the user's own history. Off by default, and deliberately: rewriting
+		 * somebody's programme is something they have to ask for.
+		 */
+		progressiveOverload: boolean("progressive_overload")
+			.default(false)
+			.notNull(),
 		fitnessExperience: text("fitness_experience"),
 		preferredActivities: text("preferred_activities").array(),
 		sleepHours: text("sleep_hours"),
+		/**
+		 * The days of the week this person usually trains, as `WEEKDAYS` slugs.
+		 * A plan rather than a record: what actually happened is in `workout`,
+		 * and this is what lets a target be right in the morning instead of only
+		 * once a session has been finished.
+		 */
+		trainingDays: text("training_days").array(),
 
 		// Profile
 		birthDate: date("birth_date"),
@@ -344,6 +360,21 @@ export const userProfile = pgTable(
 		bodyFatMassKg: real("body_fat_mass_kg"),
 		skeletalMuscleMassKg: real("skeletal_muscle_mass_kg"),
 		totalBodyWaterKg: real("total_body_water_kg"),
+		/**
+		 * The water outside the cells. Stored on its own because the split is
+		 * what a reader wants and total body water is the part that derives from
+		 * it: intracellular is whatever is left, and the ratio against the total
+		 * is the number a clinician actually looks at.
+		 */
+		extracellularWaterKg: real("extracellular_water_kg"),
+		/**
+		 * Degrees, from a bioimpedance device. The only figure on a scan that is
+		 * not arithmetic on the others: it comes from the raw reactance and
+		 * resistance, and it tracks cell membrane integrity rather than a mass.
+		 * Fat free mass and soft lean mass are deliberately absent for the
+		 * opposite reason — see `bodyComposition` in `@mezo/api/plan`.
+		 */
+		phaseAngleDeg: real("phase_angle_deg"),
 		boneMassKg: real("bone_mass_kg"),
 		proteinMassKg: real("protein_mass_kg"),
 		/** The scale's own 1-59 index, not a mass. */
@@ -355,6 +386,12 @@ export const userProfile = pgTable(
 		// Nutrition
 		eatingHabits: text("eating_habits"),
 		dailyCalories: integer("daily_calories"),
+		/**
+		 * A hydration target the user set themselves, in millilitres. Null means
+		 * the computed one stands — see `dailyTargetMl` in `@mezo/api/hydration`,
+		 * which is where the arithmetic lives rather than here.
+		 */
+		hydrationGoalMl: integer("hydration_goal_ml"),
 
 		// Health
 		// Picked from a list rather than typed, so these are arrays of slugs the
@@ -398,6 +435,17 @@ export const miloThread = pgTable(
 		title: text("title"),
 		/** `UIMessage[]` as the AI SDK defines it. */
 		messages: jsonb("messages").notNull().default([]),
+		/**
+		 * The reply still being written, if there is one.
+		 *
+		 * Set when a turn starts and cleared when it ends, so a browser that
+		 * comes back to this conversation can ask to be reconnected to a run that
+		 * is still going rather than finding the question it asked and nothing
+		 * after it. The id addresses a buffer on the server, not the reply
+		 * itself: a run that outlives the process leaves this pointing at
+		 * nothing, which reads as "no longer resumable" and not as an error.
+		 */
+		activeStreamId: text("active_stream_id"),
 		createdAt: timestamp("created_at")
 			.$defaultFn(() => new Date())
 			.notNull(),
@@ -406,8 +454,45 @@ export const miloThread = pgTable(
 			.$onUpdate(() => new Date())
 			.notNull(),
 	},
-	// The list screen only ever asks for one user's threads, newest first.
-	(t) => [index("milo_thread_user_updated_idx").on(t.userId, t.updatedAt)],
+	(t) => [
+		// The list screen only ever asks for one user's threads, newest first.
+		index("milo_thread_user_updated_idx").on(t.userId, t.updatedAt),
+		// The resume endpoint arrives with a stream id and nothing else, and this
+		// is how it finds out whose it is.
+		index("milo_thread_active_stream_idx").on(t.activeStreamId),
+	],
+);
+
+/**
+ * A named group of routines, and nothing else.
+ *
+ * The list screen is the only reader: a folder has no exercises, no schedule
+ * and no meaning beyond the heading it puts above a handful of routines. A
+ * routine with no folder is not an error state, it is the common one, so the
+ * link is nullable and deleting a folder loosens its routines rather than
+ * taking them with it.
+ */
+export const routineFolder = pgTable(
+	"routine_folder",
+	{
+		// Minted in the browser, like a routine's, so the list can render the new
+		// folder before the write comes back.
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		/** Where the folder sits among this user's folders. */
+		position: integer("position").notNull().default(0),
+		createdAt: timestamp("created_at")
+			.$defaultFn(() => new Date())
+			.notNull(),
+		updatedAt: timestamp("updated_at")
+			.$defaultFn(() => new Date())
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(t) => [index("routine_folder_user_position_idx").on(t.userId, t.position)],
 );
 
 /**
@@ -431,6 +516,14 @@ export const routine = pgTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
 		note: text("note"),
+		/**
+		 * The folder it is filed under, or null for the loose pile the list shows
+		 * last. `set null` rather than `cascade`: deleting a heading must not
+		 * delete the training underneath it.
+		 */
+		folderId: text("folder_id").references(() => routineFolder.id, {
+			onDelete: "set null",
+		}),
 		/** Where it sits in the user's own list. Ties break on `createdAt`. */
 		position: integer("position").notNull().default(0),
 		exercises: jsonb("exercises").notNull().default([]),
@@ -499,20 +592,192 @@ export const workout = pgTable(
 	],
 );
 
+/**
+ * What Milo remembers about somebody between conversations.
+ *
+ * The questionnaire in `user_profile` holds the answers Mezo knows to ask for.
+ * This holds the ones it does not: "wants a V-taper", "trains at a gym with no
+ * hack squat", "shoulder gives out on overhead pressing". They arrive in the
+ * middle of a sentence about something else, they are the difference between a
+ * coach and a form, and there is no column that could have anticipated them.
+ *
+ * A row rather than a `jsonb` array on the profile, because these are written
+ * and deleted one at a time from two different places — the model as it works,
+ * and the user reviewing the list — and a whole-document rewrite between those
+ * two is a lost note.
+ */
+export const miloNote = pgTable(
+	"milo_note",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		/**
+		 * What kind of thing this is, which is what decides the order it reaches
+		 * the model in: a goal shapes everything and a stray fact does not.
+		 */
+		kind: text("kind").notNull().default("fact"),
+		/** One fact, in the user's own terms. Short enough to read in a list. */
+		text: text("text").notNull(),
+		createdAt: timestamp("created_at")
+			.$defaultFn(() => new Date())
+			.notNull(),
+		updatedAt: timestamp("updated_at")
+			.$defaultFn(() => new Date())
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	// Every read is one user's notes, newest first.
+	(t) => [index("milo_note_user_updated_idx").on(t.userId, t.updatedAt)],
+);
+
+/**
+ * An exercise the dataset never had.
+ *
+ * The catalogue in `@mezo/api/exercises` is a fixed list of about 1300
+ * movements, and it is missing things people actually train: a Bayesian curl,
+ * whatever a coach invented last year, the one machine at somebody's gym with a
+ * name only that gym uses. Milo can add one when a user asks for it, and from
+ * then on it is picked, programmed and logged like any other exercise.
+ *
+ * The columns mirror `Exercise` because that is what these rows are turned back
+ * into. `body_part` and `equipment` are constrained in code rather than in SQL:
+ * their allowed values are derived from the dataset itself, so they change when
+ * the dataset does and a check constraint would be a migration every time.
+ * There is no media column — nobody drew a picture of it.
+ *
+ * A row per exercise rather than an array on the profile, for the same reason
+ * `milo_note` is a table: these are written one at a time by the model and
+ * deleted one at a time by the user, and a whole-document rewrite between those
+ * two loses whichever wrote second.
+ */
+export const customExercise = pgTable(
+	"custom_exercise",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		/** Stored as typed. Uniqueness per user is checked case-insensitively. */
+		name: text("name").notNull(),
+		bodyPart: text("body_part").notNull(),
+		equipment: text("equipment").notNull(),
+		/** The primary muscle, in the catalogue's own vocabulary. */
+		target: text("target").notNull(),
+		secondary: text("secondary").array().notNull().default(sql`'{}'`),
+		createdAt: timestamp("created_at")
+			.$defaultFn(() => new Date())
+			.notNull(),
+		updatedAt: timestamp("updated_at")
+			.$defaultFn(() => new Date())
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	// Every read is the same one: this user's exercises, to merge into the
+	// catalogue before anything is searched or rendered.
+	(t) => [index("custom_exercise_user_idx").on(t.userId, t.name)],
+);
+
+/**
+ * An exercise this user never wants offered again.
+ *
+ * A blacklist rather than a preference score. "Never show me upright rows"
+ * needs to be honoured exactly, by the picker and by Milo alike, and a ranking
+ * that merely deprioritises something is how a movement somebody's shoulder
+ * cannot do reappears in a routine six weeks later.
+ *
+ * `exercise_id` has no foreign key: it holds ids from both layers, the fixed
+ * catalogue in code and `custom_exercise`, and there is no one table to point
+ * at. The cost is that a deleted custom exercise leaves its blacklist row
+ * behind, which is a row matching nothing rather than a bug.
+ *
+ * Hiding only ever filters search. Sessions somebody already did still render,
+ * because a blacklist is a statement about the future.
+ */
+export const hiddenExercise = pgTable(
+	"hidden_exercise",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		exerciseId: text("exercise_id").notNull(),
+		/** Why they hid it, when they said. Shown back on the unhide screen. */
+		reason: text("reason"),
+		createdAt: timestamp("created_at")
+			.$defaultFn(() => new Date())
+			.notNull(),
+	},
+	// The pair is the row: hiding the same exercise twice is the same fact.
+	(t) => [primaryKey({ columns: [t.userId, t.exerciseId] })],
+);
+
+/**
+ * One drink.
+ *
+ * A row per drink rather than a running total per day, because the thing people
+ * actually do with a hydration tracker is undo the tap they did not mean: a
+ * counter can only be decremented by a guess at what the last entry was.
+ *
+ * `day` is the drinker's local day, sent by the browser, and is deliberately
+ * not derived from `loggedAt` on the server. A glass at half eleven at night
+ * belongs to the day the person drinking it thinks it does, and the server has
+ * no idea which day that is.
+ *
+ * `amountMl` is what was in the glass, before the hydration index in
+ * `@mezo/api/hydration` is applied. The index is a rule that can be revised;
+ * what somebody drank is not.
+ */
+export const hydrationLog = pgTable(
+	"hydration_log",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		day: date("day").notNull(),
+		amountMl: integer("amount_ml").notNull(),
+		/** A slug from `DRINKS`; unknown ones count at face value. */
+		drink: text("drink").notNull().default("water"),
+		loggedAt: timestamp("logged_at")
+			.$defaultFn(() => new Date())
+			.notNull(),
+	},
+	// Every read this table has is one user over a range of days.
+	(t) => [index("hydration_log_user_day_idx").on(t.userId, t.day)],
+);
+
 export const userRelations = relations(user, ({ many, one }) => ({
 	account: many(account),
 	session: many(session),
 	miloThreads: many(miloThread),
+	miloNotes: many(miloNote),
+	customExercises: many(customExercise),
+	hiddenExercises: many(hiddenExercise),
+	routineFolders: many(routineFolder),
 	routines: many(routine),
 	workouts: many(workout),
+	hydrationLogs: many(hydrationLog),
 	profile: one(userProfile, {
 		fields: [user.id],
 		references: [userProfile.userId],
 	}),
 }));
 
+export const routineFolderRelations = relations(
+	routineFolder,
+	({ one, many }) => ({
+		user: one(user, { fields: [routineFolder.userId], references: [user.id] }),
+		routines: many(routine),
+	}),
+);
+
 export const routineRelations = relations(routine, ({ one, many }) => ({
 	user: one(user, { fields: [routine.userId], references: [user.id] }),
+	folder: one(routineFolder, {
+		fields: [routine.folderId],
+		references: [routineFolder.id],
+	}),
 	workouts: many(workout),
 }));
 
@@ -532,10 +797,26 @@ export const miloThreadRelations = relations(miloThread, ({ one }) => ({
 	user: one(user, { fields: [miloThread.userId], references: [user.id] }),
 }));
 
+export const miloNoteRelations = relations(miloNote, ({ one }) => ({
+	user: one(user, { fields: [miloNote.userId], references: [user.id] }),
+}));
+
 export const accountRelations = relations(account, ({ one }) => ({
 	user: one(user, { fields: [account.userId], references: [user.id] }),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
 	user: one(user, { fields: [session.userId], references: [user.id] }),
+}));
+
+export const customExerciseRelations = relations(customExercise, ({ one }) => ({
+	user: one(user, { fields: [customExercise.userId], references: [user.id] }),
+}));
+
+export const hiddenExerciseRelations = relations(hiddenExercise, ({ one }) => ({
+	user: one(user, { fields: [hiddenExercise.userId], references: [user.id] }),
+}));
+
+export const hydrationLogRelations = relations(hydrationLog, ({ one }) => ({
+	user: one(user, { fields: [hydrationLog.userId], references: [user.id] }),
 }));

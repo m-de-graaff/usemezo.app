@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { WorkoutHistoryList } from "~/components/workouts/history-list";
 import { api } from "~/trpc/server";
 
-export const metadata: Metadata = { title: "Workout history | Mezo" };
+export const metadata: Metadata = { title: "Workout history" };
 
 export default async function WorkoutHistoryPage() {
 	// The proxy only sees a cookie; this is the real check.

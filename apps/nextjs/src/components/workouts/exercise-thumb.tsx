@@ -24,15 +24,24 @@ export function ExerciseThumb({
 	exerciseId: string;
 }) {
 	const exercise = exerciseById(exerciseId);
+	const src = exercise ? exerciseImage(exercise) : null;
 
-	// An id the catalogue no longer knows still has to render, or one stale
-	// routine takes the whole page down on `exercise.name`.
-	if (!exercise) {
+	// Two cases, one square. An id the catalogue no longer knows still has to
+	// render, or one stale routine takes the whole page down on `exercise.name`.
+	// And an exercise the user added themselves has no picture, because nobody
+	// drew one: it gets its initial rather than a blank tile, so a list of them
+	// is still scannable.
+	if (!src) {
 		return (
 			<div
 				aria-hidden="true"
-				className={cn("size-10 shrink-0 rounded-md bg-muted", className)}
-			/>
+				className={cn(
+					"flex size-10 shrink-0 items-center justify-center rounded-md bg-muted font-medium text-muted-foreground text-sm uppercase",
+					className,
+				)}
+			>
+				{exercise?.name.trim().charAt(0)}
+			</div>
 		);
 	}
 
@@ -44,7 +53,7 @@ export function ExerciseThumb({
 				className,
 			)}
 			height={80}
-			src={exerciseImage(exercise)}
+			src={src}
 			unoptimized
 			width={80}
 		/>

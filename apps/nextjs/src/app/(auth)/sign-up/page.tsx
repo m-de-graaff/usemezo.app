@@ -1,6 +1,8 @@
 import { AuthForm } from "~/components/auth-form";
 import { safeCallbackURL } from "~/lib/callback-url";
 
+export const metadata = { title: "Sign up" };
+
 export default async function SignUpPage({
 	searchParams,
 }: {

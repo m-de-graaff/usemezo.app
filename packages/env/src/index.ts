@@ -40,10 +40,10 @@ export const env = createEnv({
 		SMTP_URL: z.string().url().default("smtp://localhost:1025"),
 		EMAIL_FROM: z.string().default("Mezo <onboarding@resend.dev>"),
 		DATABASE_URL: z.string().url(),
-		// OpenRouter, which is what Milo talks to. Optional outside production so
+		// Anthropic, which is what Milo talks to. Optional outside production so
 		// the app still boots without it; the chat endpoint says so plainly
 		// rather than failing with a provider error.
-		AI_OPEN_ROUTER_KEY:
+		ANTHROPIC_API_KEY:
 			process.env.NODE_ENV === "production"
 				? z.string()
 				: z.string().optional(),
@@ -80,7 +80,7 @@ export const env = createEnv({
 		SMTP_URL: process.env.SMTP_URL,
 		EMAIL_FROM: process.env.EMAIL_FROM,
 		DATABASE_URL: process.env.DATABASE_URL,
-		AI_OPEN_ROUTER_KEY: process.env.AI_OPEN_ROUTER_KEY,
+		ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
 		NODE_ENV: process.env.NODE_ENV,
 	},
 	/**

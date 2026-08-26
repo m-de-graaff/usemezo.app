@@ -1,13 +1,19 @@
 "use client";
 
 import { type Exercise, exerciseById } from "@mezo/api/exercises";
+import { checkSet } from "@mezo/api/plausibility";
+import type { StrengthProfile } from "@mezo/api/strength";
 import {
 	doneSetCount,
+	estimatedSec,
 	insertIntoSuperset,
 	moveExerciseNextTo,
 	moveIntoSuperset,
 	newKey,
 	normaliseSupersets,
+	recordSetIndex,
+	restAfterSet,
+	setVolumeKg,
 	supersetRuns,
 	volumeKg,
 	type WorkoutExercise,
@@ -18,11 +24,15 @@ import { CheckIcon, Link2Icon, PlusIcon, TrashIcon, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Elapsed } from "~/components/workouts/elapsed";
+import { ExerciseInfo } from "~/components/workouts/exercise-info";
 import { ExercisePicker } from "~/components/workouts/exercise-picker";
 import { ExerciseThumb } from "~/components/workouts/exercise-thumb";
+import { NoteField } from "~/components/workouts/note-field";
 import { RestFields } from "~/components/workouts/rest-fields";
-import { ExercisePlan, SetRows } from "~/components/workouts/set-rows";
-import { formatVolume } from "~/components/workouts/summary";
+import { type Rest, RestTimer } from "~/components/workouts/rest-timer";
+import { SetRows } from "~/components/workouts/set-rows";
+import { Stats } from "~/components/workouts/stats";
+import { formatDuration, formatVolume } from "~/components/workouts/summary";
 import {
 	DragHandle,
 	Reorderable,
@@ -48,13 +58,21 @@ const AUTOSAVE_MS = 1200;
  * is a second copy that can disagree with the rows on screen.
  */
 export function LiveWorkout({
+	profile,
 	units,
 	workout,
 }: {
+	/**
+	 * Bodyweight, sex, age and experience, for the plausibility check and
+	 * nothing else. Every field is optional and most people have filled in some
+	 * of them: the check reads what is there and stays quiet about the rest.
+	 */
+	profile: StrengthProfile;
 	units: string | null | undefined;
 	workout: {
 		id: string;
 		name: string;
+		note: string | null;
 		startedAt: Date;
 		exercises: WorkoutExercise[];
 	};
@@ -62,6 +80,40 @@ export function LiveWorkout({
 	const router = useRouter();
 	const system = unitSystem(units);
 	const [exercises, setExercises] = useState(workout.exercises);
+	// Separate state from the exercises, because it is a separate write: the note
+	// changing must schedule a save without pretending the set list changed.
+	const [note, setNote] = useState(workout.note ?? undefined);
+	// The rest countdown, or nothing between sets. Not part of the document: a
+	// timer is where you are in the session, not what the session was.
+	const [rest, setRest] = useState<Rest | null>(null);
+
+	// What every exercise on screen did before today: last time's sets, and the
+	// best a single set has ever moved. Read once and left alone for the rest of
+	// the session: the record a set is measured against is the one that stood
+	// when the session opened, and refetching it mid-workout would take the medal
+	// back off the set that had just beaten it.
+	const history = api.workout.exerciseHistory.useQuery(undefined, {
+		refetchOnMount: false,
+		refetchOnWindowFocus: false,
+		staleTime: Number.POSITIVE_INFINITY,
+	});
+
+	/**
+	 * What this exercise did before today, or null while the query is in flight.
+	 *
+	 * The null matters. An exercise with no history and an exercise whose history
+	 * has not arrived both have no record, and treating the second as a record of
+	 * zero would put a medal on the first set of every exercise on the screen.
+	 */
+	const before = (exerciseId: string) =>
+		history.data
+			? (history.data[exerciseId] ?? {
+					bestSetKg: 0,
+					bestOneRepMaxKg: 0,
+					previous: [],
+					previousAt: null,
+				})
+			: null;
 
 	const leave = () => {
 		router.push("/workouts");
@@ -72,11 +124,19 @@ export function LiveWorkout({
 		onError: (error) => toast.error(error.message),
 	});
 	const finish = api.workout.finish.useMutation({
-		onSuccess: ({ setCount }) => {
+		onSuccess: ({ flagged, setCount }) => {
 			toast.success(
 				setCount
 					? `${setCount} ${setCount === 1 ? "set" : "sets"} logged.`
 					: "Workout saved, nothing logged.",
+				// Said rather than done quietly. A set left out of the records with
+				// no explanation is a bug report; a sentence pointing at the session
+				// is somebody two taps from putting it back.
+				flagged
+					? {
+							description: `${flagged} ${flagged === 1 ? "set is" : "sets are"} not counting toward records. Open the session to confirm ${flagged === 1 ? "it" : "them"}.`,
+						}
+					: undefined,
 			);
 			leave();
 		},
@@ -111,10 +171,10 @@ export function LiveWorkout({
 			// Nothing to save into a session that has just been finished or
 			// discarded; the write would only bounce off the server's own guard.
 			if (settled.current) return;
-			logRef.current.mutate({ id: workout.id, exercises });
+			logRef.current.mutate({ id: workout.id, note: note ?? null, exercises });
 		}, AUTOSAVE_MS);
 		return () => clearTimeout(id);
-	}, [exercises, workout.id]);
+	}, [exercises, note, workout.id]);
 
 	const add = (exercise: Exercise) =>
 		setExercises((current) => [
@@ -161,21 +221,111 @@ export function LiveWorkout({
 			current.map((entry) => (entry.key === key ? { ...entry, sets } : entry)),
 		);
 
-	const toggle = (key: string, index: number) =>
+	/**
+	 * Tick a set off, and everything that follows from having done so.
+	 *
+	 * The rest timer and the record check are here rather than in an effect
+	 * watching `exercises` because they belong to the act of finishing a set, not
+	 * to the list having a different shape. An effect would restart the clock
+	 * when a weight was corrected afterwards, and hand out a second medal for the
+	 * same set.
+	 *
+	 * Both only fire on the way in. Unticking a set is a correction, and a
+	 * correction should not start a countdown.
+	 */
+	const toggle = (key: string, index: number) => {
+		const entry = exercises.find((item) => item.key === key);
+		const set = entry?.sets[index];
+
+		setExercises((current) =>
+			current.map((item) =>
+				item.key === key
+					? {
+							...item,
+							sets: item.sets.map((each, i) =>
+								i === index ? { ...each, done: !each.done } : each,
+							),
+						}
+					: item,
+			),
+		);
+
+		if (!entry || !set || set.done) return;
+
+		const seconds = restAfterSet(exercises, key, index);
+		if (seconds) {
+			setRest({
+				endsAt: Date.now() + seconds * 1000,
+				label: exerciseById(entry.exerciseId)?.name ?? "that set",
+				totalSec: seconds,
+			});
+		}
+
+		// Against the sets as they are about to be, so the set just ticked is in
+		// the running. `recordSetIndex` picking it is the whole test: it beat the
+		// old record and everything else done in this session.
+		const past = before(entry.exerciseId);
+		if (past === null) return;
+
+		// Asked before the medal is handed out, because these are the same
+		// question from two directions: a set big enough to break a record is the
+		// only kind of set worth doubting, and congratulating somebody on a number
+		// you are about to ask them about is the worst of both.
+		const doubt = checkSet({
+			bestOneRepMaxKg: past.bestOneRepMaxKg,
+			exerciseId: entry.exerciseId,
+			lastDoneAt: past.previousAt,
+			profile,
+			set,
+		});
+		if (doubt) {
+			toast.warning(doubt.message, {
+				action: {
+					label: "It's right",
+					onClick: () => vouch(key, index),
+				},
+				// Long enough to read a sentence and decide. Leaving it unanswered is
+				// a valid answer: the set is logged either way, and `finish` marks it
+				// for the record books without anybody having to do anything.
+				duration: 15_000,
+			});
+			return;
+		}
+
+		const next = entry.sets.map((each, i) =>
+			i === index ? { ...each, done: true } : each,
+		);
+		if (recordSetIndex(next, past.bestSetKg) === index) {
+			toast.success(
+				`Personal record: ${formatVolume(setVolumeKg(set), system)} in one set.`,
+				{ icon: "🏅" },
+			);
+		}
+	};
+
+	/**
+	 * "It's right", from the prompt.
+	 *
+	 * Written onto the set rather than kept beside it, so the answer travels with
+	 * the autosave and `finish` finds it already there. Nothing else changes: the
+	 * set was logged the moment it was ticked, and this is only the difference
+	 * between a number that can hold a record and one that cannot.
+	 */
+	const vouch = (key: string, index: number) =>
 		setExercises((current) =>
 			current.map((entry) =>
 				entry.key === key
 					? {
 							...entry,
 							sets: entry.sets.map((set, i) =>
-								i === index ? { ...set, done: !set.done } : set,
+								i === index ? { ...set, flag: "confirmed" as const } : set,
 							),
 						}
 					: entry,
 			),
 		);
 
-	/** Anything on the entry that is not its sets: the rest timers, for now. */
+	/** Anything on the entry that is not its sets: its note and the rest timers. */
 	const patchEntry = (key: string, fields: Partial<WorkoutExercise>) =>
 		setExercises((current) =>
 			current.map((entry) =>
@@ -198,12 +348,22 @@ export function LiveWorkout({
 
 	const busy = finish.isPending || discard.isPending;
 	const done = doneSetCount(exercises);
+	// What the sets nobody has ticked yet still cost, rest included. It is the
+	// number people are actually asking when they look at a session at set nine:
+	// not how long this took, how much longer.
+	const remaining = estimatedSec(
+		exercises.map((entry) => ({
+			...entry,
+			sets: entry.sets.filter((set) => !set.done),
+		})),
+	);
 
 	/** One exercise, at its position in the flat list, which is what the buttons act on. */
 	const card = (entry: WorkoutExercise, index: number) => {
 		const exercise = exerciseById(entry.exerciseId);
 		const label = exercise?.name ?? "this exercise";
 		const grouped = entry.supersetId !== undefined;
+		const past = before(entry.exerciseId);
 
 		return (
 			<Reorderable
@@ -217,6 +377,9 @@ export function LiveWorkout({
 					<p className="min-w-0 flex-1 truncate font-medium capitalize">
 						{exercise?.name ?? "Unknown exercise"}
 					</p>
+					{/* Only on the movements whose weight column means something other
+					    than what it says. It renders nothing for the rest. */}
+					<ExerciseInfo exerciseId={entry.exerciseId} />
 					<Button
 						aria-label={
 							grouped
@@ -238,11 +401,28 @@ export function LiveWorkout({
 						<TrashIcon aria-hidden="true" />
 					</Button>
 				</div>
-				<ExercisePlan note={entry.note} />
+				<NoteField
+					className="mb-3"
+					label={`Note on ${label}`}
+					maxLength={200}
+					onChange={(text) => patchEntry(entry.key, { note: text })}
+					placeholder="Cue, substitution, how it felt"
+					rows={1}
+					value={entry.note}
+				/>
 				<SetRows
 					exerciseName={label}
 					onChange={(sets) => patch(entry.key, sets)}
 					onToggle={(setIndex) => toggle(entry.key, setIndex)}
+					// An empty list rather than nothing while the query is in
+					// flight: the column is there either way, so it does not appear a
+					// second after the page does and shove every row sideways.
+					previous={past?.previous ?? []}
+					recordIndex={
+						past === null
+							? undefined
+							: recordSetIndex(entry.sets, past.bestSetKg)
+					}
 					sets={entry.sets}
 					system={system}
 				/>
@@ -282,28 +462,37 @@ export function LiveWorkout({
 
 	return (
 		// The bottom padding is what keeps the last row, and anything focused in
-		// it, clear of the sticky bar (SC 2.4.11).
-		<div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pb-28">
+		// it, clear of the sticky bar (SC 2.4.11). The bar grows when a rest is
+		// running, so the padding has to grow with it.
+		<div
+			className={`mx-auto flex w-full max-w-3xl flex-col gap-6 ${rest ? "pb-52" : "pb-28"}`}
+		>
 			<header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-3 rounded-xl border bg-card p-4">
 				<h1 className="font-semibold text-lg tracking-tight">{workout.name}</h1>
-				<dl className="flex gap-6 text-sm">
-					<div>
-						<dt className="text-muted-foreground text-xs">Elapsed</dt>
-						<dd>
-							<Elapsed startedAt={workout.startedAt} />
-						</dd>
-					</div>
-					<div>
-						<dt className="text-muted-foreground text-xs">Sets</dt>
-						<dd className="tabular-nums">{done}</dd>
-					</div>
-					<div>
-						<dt className="text-muted-foreground text-xs">Volume</dt>
-						<dd className="tabular-nums">
-							{formatVolume(volumeKg(exercises), system)}
-						</dd>
-					</div>
-				</dl>
+				<Stats
+					items={[
+						{
+							label: "Elapsed",
+							value: <Elapsed startedAt={workout.startedAt} />,
+						},
+						{ label: "Sets", value: done },
+						{
+							label: "Volume",
+							value: formatVolume(volumeKg(exercises), system),
+						},
+						// What is left, not what it will have been. A session already
+						// half done should say half an hour, and the clock beside it is
+						// what turns that into a finishing time.
+						{ label: "Left", value: `~${formatDuration(remaining)}` },
+					]}
+				/>
+				<NoteField
+					className="basis-full"
+					label="Session note"
+					onChange={setNote}
+					placeholder="How it went, what to change next time"
+					value={note}
+				/>
 			</header>
 
 			{exercises.length === 0 ? (
@@ -324,15 +513,29 @@ export function LiveWorkout({
 				}
 			/>
 
-			{/* Sticky, so finishing is one tap from anywhere in a long session. */}
+			{/* Sticky, so finishing is one tap from anywhere in a long session, and
+			    so the rest clock is still on screen after the list has scrolled. */}
 			<div className="fixed inset-x-0 bottom-0 border-t bg-background/95 p-3 backdrop-blur">
+				{rest && (
+					<RestTimer
+						onAdjust={(deltaSec) =>
+							setRest((current) =>
+								current
+									? { ...current, endsAt: current.endsAt + deltaSec * 1000 }
+									: current,
+							)
+						}
+						onDone={() => setRest(null)}
+						rest={rest}
+					/>
+				)}
 				<div className="mx-auto flex max-w-3xl gap-2">
 					<Button
 						className="flex-1"
 						disabled={busy}
 						onClick={() => {
 							settled.current = true;
-							finish.mutate({ id: workout.id, exercises });
+							finish.mutate({ id: workout.id, note: note ?? null, exercises });
 						}}
 						size="lg"
 					>

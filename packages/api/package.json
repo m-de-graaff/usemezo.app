@@ -5,10 +5,15 @@
 	"type": "module",
 	"exports": {
 		".": "./src/root.ts",
+		"./exercise": "./src/routers/exercise.ts",
 		"./exercises": "./src/exercises.ts",
+		"./hydration": "./src/hydration.ts",
 		"./milo": "./src/routers/milo.ts",
 		"./plan": "./src/plan.ts",
+		"./plausibility": "./src/plausibility.ts",
 		"./profile-fields": "./src/profile-fields.ts",
+		"./strength": "./src/strength.ts",
+		"./training": "./src/training.ts",
 		"./trpc": "./src/trpc.ts",
 		"./workout-shape": "./src/workout-shape.ts"
 	},

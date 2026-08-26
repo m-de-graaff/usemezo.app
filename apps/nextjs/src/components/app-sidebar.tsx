@@ -21,6 +21,7 @@ import {
 	settingsNavGroups,
 } from "~/components/app-nav";
 import { LogoMark } from "~/components/logo";
+import { MiloMemory } from "~/components/milo/memory-list";
 import { MiloThreadList } from "~/components/milo/thread-list";
 
 export function AppSidebar() {
@@ -72,7 +73,12 @@ export function AppSidebar() {
 				{/* Past conversations belong next to the chat and nowhere else, so
 				    this appends rather than swapping the nav out the way Settings
 				    does. */}
-				{pathname.startsWith("/milo") && <MiloThreadList />}
+				{pathname.startsWith("/milo") && (
+					<>
+						<MiloThreadList />
+						<MiloMemory />
+					</>
+				)}
 			</SidebarContent>
 			{inSettings && (
 				<SidebarFooter>

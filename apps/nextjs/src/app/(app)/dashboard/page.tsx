@@ -11,6 +11,8 @@ import { formatVolume } from "~/components/workouts/summary";
 import { unitSystem } from "~/lib/measure";
 import { api } from "~/trpc/server";
 
+export const metadata = { title: "Dashboard" };
+
 /**
  * Nothing to compare against is not a 100% rise, and it is not a fall either.
  * A first week of training should read as no change rather than as a number

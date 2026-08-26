@@ -758,3 +758,48 @@ Also added, not in the original plan: `restAfterSec` alongside `restSec`, edited
 by `rest-fields.tsx`. Rest between an exercise's sets and rest before the next
 exercise are different numbers, and one field for both would make you pick which
 to be wrong about.
+
+---
+
+## Amendment: rep ranges, and what a weight column means
+
+Two things the original plan left open, and one it did not anticipate.
+
+**A set can be prescribed as a range.** `plannedSet` gains an optional `repsMax`.
+Absent, `reps` is the whole target and five means five. Present, `reps` is the
+bottom and `repsMax` is the top, which is how nearly every hypertrophy block is
+actually written down. Nothing about volume, set counts or estimates changes:
+those read what was lifted, and a range is what was asked for.
+
+The control is per exercise rather than per set. "Three sets of eight to twelve"
+is one decision, and a range picker on every row would be the same question
+asked three times. The routine builder gets a Rep range toggle beside Add set;
+a live session inherits whatever the routine said and shows the target beside
+the box you log the actual reps into, because the number that matters at the
+rack is what you did.
+
+Milo already asked for `repsMax` and folded it into the note as prose. It now
+lands on the sets, where the rows draw it and double progression can read it,
+and the note is left for the effort target and the cue.
+
+**Some exercises are logged in a convention nobody states.** Twenty on a
+dumbbell press is forty kilograms in the air, twenty on an assisted pull-up is
+twenty taken off you, and twenty on a barbell is a bar with nothing on it.
+Somebody who logs all three the way they read them has a history that says they
+got weaker.
+
+`loggingHint` in `@mezo/api/exercises` keys one sentence off `equipment`, and
+`ExerciseInfo` renders it behind an info button beside the exercise on the two
+logging screens and the routine view. It returns null for most of the catalogue
+on purpose: an icon beside eight hundred exercises is an icon nobody reads.
+`searchExercises` hands the same sentence to Milo as `logAs`, so a proposal
+prices a dumbbell per hand rather than as the pair.
+
+**Prompt caching.** The system prompt moved from `streamText`'s `system` field
+into the first message so a cache breakpoint can hang off it, and a second
+breakpoint sits on the last message of the incoming conversation. A routine
+build is sixteen steps that each re-send the tools, the prompt and the history;
+caching that prefix is what makes the step count affordable rather than
+something to trim.
+
+Still not here: drop sets, RPE as a field of its own, and per-set rest.

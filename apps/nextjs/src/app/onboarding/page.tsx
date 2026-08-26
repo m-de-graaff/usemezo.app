@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { OnboardingFlow } from "~/components/onboarding-flow";
 import { api } from "~/trpc/server";
 
-export const metadata: Metadata = { title: "Welcome to Mezo" };
+export const metadata: Metadata = { title: { absolute: "Welcome to Mezo" } };
 
 /**
  * Outside the `(app)` group on purpose: that layout redirects here until

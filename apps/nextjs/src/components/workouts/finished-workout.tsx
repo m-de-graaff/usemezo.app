@@ -1,6 +1,9 @@
 import { exerciseById } from "@mezo/api/exercises";
 import { supersetRuns, type WorkoutExercise } from "@mezo/api/workout-shape";
+import { cn } from "@mezo/ui/lib/utils";
+import { ConfirmSet } from "~/components/workouts/confirm-set";
 import { ExerciseThumb } from "~/components/workouts/exercise-thumb";
+import { Stats } from "~/components/workouts/stats";
 import { formatDuration, formatVolume } from "~/components/workouts/summary";
 import { supersetLabel } from "~/components/workouts/superset";
 import {
@@ -31,6 +34,83 @@ const describeSet =
 		return line;
 	};
 
+/**
+ * The sets of one exercise, a row each.
+ *
+ * A row each rather than one comma-separated line. Reading a session back is
+ * comparing set three to set one — did it hold, did it drop — and a sentence
+ * makes that a counting exercise while a column makes it a glance. The numbers
+ * are the only thing that changes between rows, so they line up: `tabular-nums`
+ * and a fixed first column are what let somebody read down them.
+ *
+ * Working sets are numbered among themselves, exactly as they are on the
+ * logging screen. A warm-up sitting first must not push the first working set
+ * to "2": that is the number the lifter counted at the time.
+ */
+function SetList({
+	entryKey,
+	sets,
+	system,
+	unit,
+	workoutId,
+}: {
+	entryKey: string;
+	sets: WorkoutExercise["sets"];
+	system: UnitSystem;
+	unit: string;
+	workoutId: string;
+}) {
+	const describe = describeSet(system, unit);
+	let working = 0;
+
+	return (
+		<ol className="mt-1.5">
+			{sets.map((set, index) => {
+				const warmup = set.type === "warmup";
+				if (!warmup) working += 1;
+
+				return (
+					<li
+						className="flex items-baseline gap-3 py-0.5 text-sm"
+						// A finished session is a record: this list is rendered once and
+						// nothing ever reorders it.
+						// biome-ignore lint/suspicious/noArrayIndexKey: static list
+						key={index}
+					>
+						{/* The letter carries the type, not the colour, so a warm-up is
+						    still a warm-up in greyscale and to a screen reader (SC 1.4.1). */}
+						<span
+							className={cn(
+								"w-4 shrink-0 text-xs tabular-nums",
+								warmup
+									? "text-amber-600 dark:text-amber-500"
+									: "text-muted-foreground",
+							)}
+						>
+							{warmup ? "W" : working}
+						</span>
+						<span className="tabular-nums">{describe(set)}</span>
+						{/* Stated in words next to the set rather than drawn as a badge
+						    somewhere else. The sentence is the whole explanation of why
+						    this one is not on the medal table, and the button beside it is
+						    the whole of putting it back. */}
+						{set.flag === "suspect" && (
+							<span className="flex items-baseline gap-1 text-muted-foreground text-xs">
+								Not counted toward records
+								<ConfirmSet
+									index={index}
+									setKey={entryKey}
+									workoutId={workoutId}
+								/>
+							</span>
+						)}
+					</li>
+				);
+			})}
+		</ol>
+	);
+}
+
 /** A session that is over. Read-only on purpose: history is not a draft. */
 export function FinishedWorkout({
 	units,
@@ -38,6 +118,7 @@ export function FinishedWorkout({
 }: {
 	units: string | null | undefined;
 	workout: {
+		id: string;
 		name: string;
 		note: string | null;
 		startedAt: Date;
@@ -65,24 +146,21 @@ export function FinishedWorkout({
 						year: "numeric",
 					})}
 				</p>
-				<dl className="mt-3 flex gap-6 text-sm">
-					<div>
-						<dt className="text-muted-foreground text-xs">Duration</dt>
-						<dd className="tabular-nums">
-							{formatDuration(workout.durationSec)}
-						</dd>
-					</div>
-					<div>
-						<dt className="text-muted-foreground text-xs">Sets</dt>
-						<dd className="tabular-nums">{workout.setCount}</dd>
-					</div>
-					<div>
-						<dt className="text-muted-foreground text-xs">Volume</dt>
-						<dd className="tabular-nums">
-							{formatVolume(workout.volumeKg, system)}
-						</dd>
-					</div>
-				</dl>
+				<div className="mt-3">
+					<Stats
+						items={[
+							{
+								label: "Duration",
+								value: formatDuration(workout.durationSec),
+							},
+							{ label: "Sets", value: workout.setCount },
+							{
+								label: "Volume",
+								value: formatVolume(workout.volumeKg, system),
+							},
+						]}
+					/>
+				</div>
 				{workout.note && (
 					<p className="mt-3 text-sm leading-relaxed">{workout.note}</p>
 				)}
@@ -116,9 +194,22 @@ export function FinishedWorkout({
 										<p className="truncate font-medium capitalize">
 											{exercise?.name ?? "Unknown exercise"}
 										</p>
-										<p className="text-muted-foreground text-sm tabular-nums">
-											{entry.sets.map(describeSet(system, unit)).join(", ")}
-										</p>
+										{/* Whatever was noted on this exercise, by the lifter
+										    mid-session or by Milo after it. Above the sets, where the
+										    same line sits on the logging screen: underneath them it
+										    reads as a caption on the numbers rather than the plan. */}
+										{entry.note && (
+											<p className="mt-0.5 text-muted-foreground text-sm leading-relaxed">
+												{entry.note}
+											</p>
+										)}
+										<SetList
+											entryKey={entry.key}
+											sets={entry.sets}
+											system={system}
+											unit={unit}
+											workoutId={workout.id}
+										/>
 									</div>
 								</li>
 							);

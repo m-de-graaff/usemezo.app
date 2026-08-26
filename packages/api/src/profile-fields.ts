@@ -112,6 +112,24 @@ export const SLEEP_HOURS: Options = {
 	"over-8": "More than 8 hours",
 };
 
+/**
+ * The week, as a schedule rather than as a log.
+ *
+ * Keys are the three-letter forms because they are what a weekday is called in
+ * every other list of them; the labels are spelled out because a settings
+ * screen is read, not scanned. Monday first: this is a training week, and
+ * nobody plans one starting on Sunday.
+ */
+export const WEEKDAYS: Options = {
+	mon: "Monday",
+	tue: "Tuesday",
+	wed: "Wednesday",
+	thu: "Thursday",
+	fri: "Friday",
+	sat: "Saturday",
+	sun: "Sunday",
+};
+
 export const ACTIVITIES: Options = {
 	"strength-training": "Strength training",
 	running: "Running",
@@ -436,12 +454,14 @@ export const profileInput = z.object({
 	units: enumOf(UNITS).nullish(),
 
 	goals: z.array(enumOf(GOALS)).max(Object.keys(GOALS).length).nullish(),
+	progressiveOverload: z.boolean().optional(),
 	fitnessExperience: enumOf(FITNESS_EXPERIENCE).nullish(),
 	preferredActivities: z
 		.array(enumOf(ACTIVITIES))
 		.max(Object.keys(ACTIVITIES).length)
 		.nullish(),
 	sleepHours: enumOf(SLEEP_HOURS).nullish(),
+	trainingDays: z.array(enumOf(WEEKDAYS)).max(7).nullish(),
 
 	// A birthday in the future, or from before anyone alive, is a typo.
 	birthDate: z.iso
@@ -468,6 +488,10 @@ export const profileInput = z.object({
 	bodyFatMassKg: z.number().min(0.5).max(200).nullish(),
 	skeletalMuscleMassKg: z.number().min(5).max(100).nullish(),
 	totalBodyWaterKg: z.number().min(5).max(120).nullish(),
+	extracellularWaterKg: z.number().min(1).max(80).nullish(),
+	// Human phase angles run from about 3 to 10; the bounds are wider than that
+	// so an unusual but real reading is not refused.
+	phaseAngleDeg: z.number().min(2).max(15).nullish(),
 	boneMassKg: z.number().min(0.5).max(10).nullish(),
 	proteinMassKg: z.number().min(1).max(50).nullish(),
 	visceralFatLevel: z.number().int().min(1).max(59).nullish(),
@@ -673,11 +697,29 @@ export const SECTIONS: readonly Section[] = [
 					values.goalDirection === "lose" || values.goalDirection === "gain",
 			},
 			{
+				type: "toggle",
+				name: "progressiveOverload",
+				label: "Automatic progressive overload",
+				question: "Should Mezo raise your weights for you?",
+				onLabel:
+					"On (weights are raised from your own history when you start a routine)",
+				offLabel: "Off (routines start with the weights you wrote down)",
+				help: "Double progression: climb your rep range at one weight, and the jump comes when every working set reaches the top of it. Gaps hold the weight and two failed sessions bring it down. Warm-ups and your set counts are never touched.",
+			},
+			{
 				type: "select",
 				name: "fitnessExperience",
 				label: "Previous fitness experience",
 				question: "How much training have you done?",
 				options: FITNESS_EXPERIENCE,
+			},
+			{
+				type: "multiselect",
+				name: "trainingDays",
+				label: "Days you train",
+				question: "Which days do you usually train?",
+				options: WEEKDAYS,
+				help: "Your usual week, not a promise. Mezo raises your hydration target on these days from the morning rather than waiting for a session to finish, and a session you actually log always overrides the estimate.",
 			},
 			{
 				type: "multiselect",
@@ -856,6 +898,28 @@ export const SECTIONS: readonly Section[] = [
 				step: 0.1,
 				measure: "mass",
 				help: "Moves with hydration and salt, so read it as a trend rather than as a number for one morning.",
+			},
+			{
+				type: "number",
+				name: "extracellularWaterKg",
+				label: "Extracellular water",
+				question: "What is your extracellular water?",
+				min: 1,
+				max: 80,
+				step: 0.1,
+				measure: "mass",
+				help: "The water outside your cells. Mezo works out the intracellular half from your total, and reads the two against each other: much above 39% of the total usually means fluid retention rather than a training change.",
+			},
+			{
+				type: "number",
+				name: "phaseAngleDeg",
+				label: "Phase angle",
+				question: "What is your phase angle?",
+				min: 2,
+				max: 15,
+				step: 0.1,
+				unit: "°",
+				help: "The one number on a scan that is not worked out from the others. It comes from the raw electrical reading and tracks cell quality, so it moves with training and recovery rather than with what you ate last night. Around 5 to 6 is typical, and above 7 is athletic.",
 			},
 			{
 				type: "number",

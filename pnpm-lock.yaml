@@ -23,6 +23,9 @@ importers:
 
   apps/nextjs:
     dependencies:
+      '@ai-sdk/anthropic':
+        specifier: ^4.0.41
+        version: 4.0.41(zod@4.4.3)
       '@assistant-ui/ai-sdk':
         specifier: ^0.0.2
         version: 0.0.2(@types/react@19.2.18)(react@19.2.8)(zod@4.4.3)(zustand@5.0.15(@types/react@19.2.18)(immer@11.1.18)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8)))
@@ -47,9 +50,6 @@ importers:
       '@mezo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@openrouter/ai-sdk-provider':
-        specifier: ^3.0.0
-        version: 3.0.0(ai@7.0.77(zod@4.4.3))(zod@4.4.3)
       '@tanstack/react-query':
         specifier: ^5.102.1
         version: 5.102.1(react@19.2.8)
@@ -65,6 +65,9 @@ importers:
       ai:
         specifier: ^7.0.77
         version: 7.0.77(zod@4.4.3)
+      assistant-stream:
+        specifier: ^0.3.39
+        version: 0.3.39
       better-auth:
         specifier: ^1.7.1
         version: 1.7.1(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(gel@2.2.0)(kysely@0.29.5)(postgres@3.4.9))(next@16.3.2(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -312,6 +315,12 @@ importers:
   tooling/typescript: {}
 
 packages:
+
+  '@ai-sdk/anthropic@4.0.41':
+    resolution: {integrity: sha512-So62as8fexWMmXMIxvrWVaDLjLRe6EG2+5mmRc1KCPBoyyyFx6zbTcCvxJkViSUHhsGMBDryAm+mfs91n7Jl8g==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   '@ai-sdk/gateway@4.0.62':
     resolution: {integrity: sha512-zR3pustGWhw5eUZHG+fJZx/V/PBe+LxdDpc5hDFWxozG/3MB/+eY62jn+YiR+9uOH+Hx63e5zJoeKLfZfPktWQ==}
@@ -1506,13 +1515,6 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
-
-  '@openrouter/ai-sdk-provider@3.0.0':
-    resolution: {integrity: sha512-m9XTSWoODH2RM5OsZpaGiN7QRR8cdP5paBWq699Tu3JVmGPBKT8xF8XwV0ZBVVsjikD/JgWfak4VSsTR4wAVbg==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      ai: ^7.0.0
-      zod: ^3.25.76 || ^4.1.8
 
   '@opentelemetry/semantic-conventions@1.43.0':
     resolution: {integrity: sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg==}
@@ -5025,6 +5027,12 @@ packages:
 
 snapshots:
 
+  '@ai-sdk/anthropic@4.0.41(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.7
+      '@ai-sdk/provider-utils': 5.0.29(zod@4.4.3)
+      zod: 4.4.3
+
   '@ai-sdk/gateway@4.0.62(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 4.0.7
@@ -5977,11 +5985,6 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
-
-  '@openrouter/ai-sdk-provider@3.0.0(ai@7.0.77(zod@4.4.3))(zod@4.4.3)':
-    dependencies:
-      ai: 7.0.77(zod@4.4.3)
-      zod: 4.4.3
 
   '@opentelemetry/semantic-conventions@1.43.0': {}
 

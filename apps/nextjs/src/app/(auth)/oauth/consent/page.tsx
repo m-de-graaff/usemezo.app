@@ -1,5 +1,7 @@
 import { ConsentForm } from "~/components/consent-form";
 
+export const metadata = { title: "Authorise app" };
+
 export default async function ConsentPage({
 	searchParams,
 }: {

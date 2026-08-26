@@ -1,6 +1,7 @@
 import { getSession } from "@mezo/auth/server";
 import { redirect } from "next/navigation";
 import { AppShell } from "~/components/app-shell";
+import { ExerciseCatalogue } from "~/components/workouts/exercise-catalogue";
 import { api } from "~/trpc/server";
 
 /**
@@ -11,6 +12,11 @@ import { api } from "~/trpc/server";
  *
  * It is also the onboarding gate. `/onboarding` deliberately sits outside this
  * group, or sending someone there would send them there again.
+ *
+ * The exercise catalogue is read here rather than in the components that use
+ * it, so the first client render already knows this user's own exercises and
+ * their blacklist. Fetching it lower down would mean every list of exercises
+ * painting "Unknown exercise" once before the query lands.
  */
 export default async function AppLayout({
 	children,
@@ -23,5 +29,11 @@ export default async function AppLayout({
 	const profile = await api.profile.get();
 	if (!profile.onboardedAt) redirect("/onboarding");
 
-	return <AppShell user={session.user}>{children}</AppShell>;
+	const catalogue = await api.exercise.catalogue();
+
+	return (
+		<ExerciseCatalogue initial={catalogue}>
+			<AppShell user={session.user}>{children}</AppShell>
+		</ExerciseCatalogue>
+	);
 }

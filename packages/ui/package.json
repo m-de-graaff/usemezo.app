@@ -18,6 +18,7 @@
 		"./kbd": "./src/kbd.tsx",
 		"./label": "./src/label.tsx",
 		"./lib/utils": "./src/lib/utils.ts",
+		"./popover": "./src/popover.tsx",
 		"./select": "./src/select.tsx",
 		"./separator": "./src/separator.tsx",
 		"./sheet": "./src/sheet.tsx",
@@ -26,10 +27,12 @@
 		"./sonner": "./src/sonner.tsx",
 		"./table": "./src/table.tsx",
 		"./theme": "./src/theme.tsx",
+		"./theme-state": "./src/theme-state.ts",
 		"./tooltip": "./src/tooltip.tsx"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
+		"test": "node --test \"src/**/*.test.ts\"",
 		"ui-add": "shadcn add"
 	},
 	"dependencies": {

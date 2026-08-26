@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { Milo } from "~/components/milo/milo";
 import { api } from "~/trpc/server";
 
-export const metadata: Metadata = { title: "Milo | Mezo" };
+export const metadata: Metadata = { title: "Milo" };
 
 /**
  * One conversation.
@@ -45,6 +45,10 @@ export default async function MiloThreadPage({
 			}}
 		>
 			<Milo
+				// Set while a reply is still being written, which is how the runtime
+				// knows to ask to be reconnected rather than showing a question with
+				// nothing after it.
+				activeStreamId={thread?.activeStreamId ?? null}
 				initialMessages={(thread?.messages ?? []) as UIMessage[]}
 				threadId={threadId}
 			/>

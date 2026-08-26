@@ -5,7 +5,7 @@ import { FinishedWorkout } from "~/components/workouts/finished-workout";
 import { LiveWorkout } from "~/components/workouts/live-workout";
 import { api } from "~/trpc/server";
 
-export const metadata: Metadata = { title: "Workout | Mezo" };
+export const metadata: Metadata = { title: "Workout" };
 
 /**
  * One session, live or finished.
@@ -35,6 +35,17 @@ export default async function WorkoutPage({
 	return workout.finishedAt ? (
 		<FinishedWorkout units={profile.units} workout={workout} />
 	) : (
-		<LiveWorkout units={profile.units} workout={workout} />
+		<LiveWorkout
+			profile={{
+				birthDate: profile.birthDate,
+				bodyFatPercent: profile.bodyFatPercent,
+				fitnessExperience: profile.fitnessExperience,
+				gender: profile.gender,
+				heightCm: profile.heightCm,
+				weightKg: profile.weightKg,
+			}}
+			units={profile.units}
+			workout={workout}
+		/>
 	);
 }

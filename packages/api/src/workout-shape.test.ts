@@ -1,16 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+	applyNotes,
+	DEFAULT_REST_SEC,
 	decodeCursor,
 	doneSetCount,
 	dropUnfinished,
 	encodeCursor,
+	estimatedSec,
 	insertIntoSuperset,
 	isoDay,
 	moveExerciseNextTo,
 	moveIntoSuperset,
 	newKey,
 	normaliseSupersets,
+	recordSetIndex,
+	restAfterSet,
 	routineExercises,
 	startFromRoutine,
 	supersetRuns,
@@ -385,4 +390,177 @@ test("a day label follows the local clock, not UTC", () => {
 	assert.equal(isoDay(new Date(2026, 7, 25, 21, 0, 0)), "2026-08-25");
 	// Padded, or the chart's labels stop sorting as strings.
 	assert.equal(isoDay(new Date(2026, 0, 5)), "2026-01-05");
+});
+
+test("a note is written onto every entry for that exercise", () => {
+	const { exercises, missing } = applyNotes(
+		[
+			{ key: "a", exerciseId: "squat", sets: [] },
+			{ key: "b", exerciseId: "bench", sets: [], note: "old" },
+			{ key: "c", exerciseId: "squat", sets: [] },
+		],
+		[
+			{ exerciseId: "squat", note: "knee felt fine" },
+			{ exerciseId: "bench", note: "shoulder twinged on set 3" },
+		],
+	);
+
+	assert.equal(exercises[0]?.note, "knee felt fine");
+	// The same movement twice takes the same note. Picking one of the two would
+	// be a coin toss the reader cannot see.
+	assert.equal(exercises[2]?.note, "knee felt fine");
+	assert.equal(exercises[1]?.note, "shoulder twinged on set 3");
+	assert.deepEqual(missing, []);
+});
+
+test("an empty note clears one, and an unknown exercise is reported", () => {
+	const { exercises, missing } = applyNotes(
+		[{ key: "a", exerciseId: "squat", sets: [], note: "old" }],
+		[
+			{ exerciseId: "squat", note: "" },
+			{ exerciseId: "deadlift", note: "went well" },
+		],
+	);
+
+	// Absent, not empty: a cleared note has to look like one that was never
+	// written, or the reader gets a blank line where the plan used to be.
+	assert.deepEqual(exercises, [{ key: "a", exerciseId: "squat", sets: [] }]);
+	assert.deepEqual(missing, ["deadlift"]);
+});
+
+test("an estimate counts the rest, which is most of a session", () => {
+	// Three sets of ten with two minutes between them: three minutes of lifting
+	// and four of standing about. An estimate that counts only the lifting is
+	// wrong by more than the thing it is estimating.
+	const estimate = estimatedSec([
+		{ sets: [{ reps: 10 }, { reps: 10 }, { reps: 10 }], restSec: 120 },
+	]);
+	assert.equal(estimate, 30 * 3 + 120 * 2);
+
+	// Nothing after the last exercise: the session is over.
+	assert.equal(
+		estimatedSec([{ sets: [{ reps: 10 }], restSec: 120, restAfterSec: 180 }]),
+		30,
+	);
+	// But between two, the walk counts.
+	assert.equal(
+		estimatedSec([
+			{ sets: [{ reps: 10 }], restSec: 120, restAfterSec: 180 },
+			{ sets: [{ reps: 10 }], restSec: 120 },
+		]),
+		30 + 180 + 30,
+	);
+});
+
+test("a short set still costs the walk to the rack", () => {
+	// A triple is ten seconds of lifting and a minute of setting up.
+	assert.equal(estimatedSec([{ sets: [{ reps: 1 }] }]), 20);
+	// And a set nobody has filled in is not a set of zero seconds.
+	assert.equal(estimatedSec([{ sets: [{}] }]), 20);
+	assert.equal(estimatedSec([]), 0);
+});
+
+test("a set can carry a rep range, and the range is not what is counted", () => {
+	const routine = [
+		{
+			key: "a",
+			exerciseId: "0001",
+			sets: [{ reps: 8, repsMax: 12, weightKg: 60 }],
+		},
+	];
+	assert.deepEqual(routineExercises.parse(routine), routine);
+
+	// Volume is what was lifted, not what was prescribed: a set logged at 10
+	// reps counts 10, whatever range it was written down as.
+	assert.equal(
+		volumeKg([
+			{
+				key: "a",
+				exerciseId: "0001",
+				sets: [{ reps: 10, repsMax: 12, weightKg: 60, done: true }],
+			},
+		]),
+		600,
+	);
+});
+
+test("a rep range survives the round trip through a session", () => {
+	const session = startFromRoutine([
+		{ key: "a", exerciseId: "0001", sets: [{ reps: 8, repsMax: 12 }] },
+	]);
+	assert.equal(session[0]?.sets[0]?.repsMax, 12);
+	assert.deepEqual(toRoutineExercises(session)[0]?.sets, [
+		{ reps: 8, repsMax: 12 },
+	]);
+});
+
+test("the record set is the one that moved the most weight", () => {
+	const sets = [
+		{ reps: 10, weightKg: 60, done: true },
+		{ reps: 5, weightKg: 100, done: true },
+		{ reps: 12, weightKg: 60, done: true },
+	];
+
+	// 720 beats the old best of 700; the heavier double moved less and is not it.
+	assert.equal(recordSetIndex(sets, 700), 2);
+	// Nothing beats a best that already stands.
+	assert.equal(recordSetIndex(sets, 800), undefined);
+	// A set nobody ticked is a set nobody did.
+	assert.equal(
+		recordSetIndex([{ reps: 20, weightKg: 100, done: false }], 0),
+		undefined,
+	);
+	// A warm-up is training, not tonnage, so it cannot be a record.
+	assert.equal(
+		recordSetIndex(
+			[{ reps: 20, weightKg: 100, done: true, type: "warmup" }],
+			0,
+		),
+		undefined,
+	);
+});
+
+test("rest after a set knows which set it was", () => {
+	const exercises = [
+		{
+			key: "a",
+			exerciseId: "0001",
+			supersetId: "g",
+			restSec: 30,
+			restAfterSec: 180,
+			sets: [
+				{ reps: 10, done: true },
+				{ reps: 10, done: false },
+			],
+		},
+		{
+			key: "b",
+			exerciseId: "0002",
+			supersetId: "g",
+			restSec: 45,
+			restAfterSec: 240,
+			sets: [{ reps: 10, done: false }],
+		},
+		{ key: "c", exerciseId: "0003", sets: [{ reps: 10, done: false }] },
+		{
+			key: "d",
+			exerciseId: "0004",
+			restSec: 0,
+			sets: [{ reps: 10, done: false }],
+		},
+	];
+
+	// Mid-exercise: the between-sets interval.
+	assert.equal(restAfterSet(exercises, "a", 0), 30);
+	// Last set, but the next exercise is the other half of the superset, so the
+	// answer is to turn around and start it.
+	assert.equal(restAfterSet(exercises, "a", 1), undefined);
+	// Last set of the last member: the round is over.
+	assert.equal(restAfterSet(exercises, "b", 0), 240);
+	// An exercise nobody set an interval on still rests. A field almost nobody
+	// fills in is not a reason to have no timer.
+	assert.equal(restAfterSet(exercises, "c", 0), DEFAULT_REST_SEC);
+	// Zero is off, and off is a choice rather than an unopened field.
+	assert.equal(restAfterSet(exercises, "d", 0), undefined);
+	assert.equal(restAfterSet(exercises, "gone", 0), undefined);
 });

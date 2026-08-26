@@ -31,6 +31,7 @@ import {
 import type { FC } from "react";
 import { LogoThinking } from "~/components/logo-thinking";
 import { MarkdownText } from "~/components/milo/markdown-text";
+import { useStopRun } from "~/components/milo/stop-run";
 import { ToolFallback } from "~/components/milo/tool-fallback";
 import { TooltipIconButton } from "~/components/milo/tooltip-icon-button";
 
@@ -174,8 +175,10 @@ const ThreadWelcome: FC = () => (
 			What can I help with?
 		</h1>
 		<p className="mt-2 max-w-sm text-pretty text-muted-foreground text-sm leading-relaxed">
-			Ask about your training, food or sleep. Milo can read your saved numbers
-			and suggest changes, but nothing is written until you say so.
+			Ask about your training, food or sleep. Milo reads your saved numbers and
+			suggests changes to them, and nothing there is written until you say so.
+			Tell it what you are training for and it will keep a note, which you can
+			read and delete in the sidebar.
 		</p>
 	</div>
 );
@@ -217,37 +220,47 @@ const Composer: FC = () => (
 	</ComposerPrimitive.Root>
 );
 
-const ComposerAction: FC = () => (
-	<div className="relative flex items-center justify-end">
-		<AuiIf condition={(s) => !s.thread.isRunning}>
-			<ComposerPrimitive.Send asChild>
-				<TooltipIconButton
-					aria-label="Send message"
-					className="size-7 rounded-full"
-					side="bottom"
-					tooltip="Send message"
-					type="button"
-					variant="default"
-				>
-					<ArrowUpIcon className="size-4" />
-				</TooltipIconButton>
-			</ComposerPrimitive.Send>
-		</AuiIf>
-		<AuiIf condition={(s) => s.thread.isRunning}>
-			<ComposerPrimitive.Cancel asChild>
-				<Button
-					aria-label="Stop generating"
-					className="size-7 rounded-full"
-					size="icon"
-					type="button"
-					variant="default"
-				>
-					<SquareIcon className="size-3.5 fill-current" />
-				</Button>
-			</ComposerPrimitive.Cancel>
-		</AuiIf>
-	</div>
-);
+const ComposerAction: FC = () => {
+	const stopRun = useStopRun();
+
+	return (
+		<div className="relative flex items-center justify-end">
+			<AuiIf condition={(s) => !s.thread.isRunning}>
+				<ComposerPrimitive.Send asChild>
+					<TooltipIconButton
+						aria-label="Send message"
+						className="size-7 rounded-full"
+						side="bottom"
+						tooltip="Send message"
+						type="button"
+						variant="default"
+					>
+						<ArrowUpIcon className="size-4" />
+					</TooltipIconButton>
+				</ComposerPrimitive.Send>
+			</AuiIf>
+			<AuiIf condition={(s) => s.thread.isRunning}>
+				<ComposerPrimitive.Cancel asChild>
+					<Button
+						aria-label="Stop generating"
+						className="size-7 rounded-full"
+						// The primitive hangs up this browser's connection. That is no
+						// longer the same thing as stopping the reply, which is being
+						// written into a buffer the server owns, so the run is told to
+						// stop as well. Both, in that order: the screen answers now and
+						// the server catches up.
+						onClick={stopRun}
+						size="icon"
+						type="button"
+						variant="default"
+					>
+						<SquareIcon className="size-3.5 fill-current" />
+					</Button>
+				</ComposerPrimitive.Cancel>
+			</AuiIf>
+		</div>
+	);
+};
 
 const MessageError: FC = () => (
 	<MessagePrimitive.Error>

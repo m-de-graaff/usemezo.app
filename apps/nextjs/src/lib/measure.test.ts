@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	displayMeasure,
+	formatDuration,
 	formatFeetInches,
+	formatRest,
+	formatVolume,
 	fromDisplay,
+	QUICK_ADD_ML,
 	toDisplay,
 	unitSystem,
 } from "./measure.ts";
@@ -70,4 +74,42 @@ test("metric passes a number input through untouched", () => {
 test("a field with no measure is never converted", () => {
 	assert.equal(toDisplay(2400, undefined, "imperial"), 2400);
 	assert.equal(fromDisplay(2400, undefined, "imperial"), 2400);
+});
+
+test("a rest interval reads as a person counts it", () => {
+	// Nobody rests for "150 seconds". A number the reader has to divide by sixty
+	// is a number they stop reading.
+	assert.equal(formatRest(150), "2m 30s");
+	assert.equal(formatRest(45), "45s");
+	// A round two minutes is two minutes, not "2m 0s".
+	assert.equal(formatRest(120), "2m");
+	assert.equal(formatRest(0), "0s");
+});
+
+test("a duration past an hour stops being minutes", () => {
+	assert.equal(formatDuration(4080), "1h 08m");
+	assert.equal(formatDuration(1800), "30m");
+	assert.equal(formatDuration(0), "0m");
+});
+
+test("a volume reads in the unit the reader chose", () => {
+	// Litres past a litre, because nobody says "one thousand seven hundred
+	// millilitres" — and millilitres below it, because a glass of water is not
+	// "0.3 L".
+	assert.equal(formatVolume(1700, "metric"), "1.7 L");
+	assert.equal(formatVolume(2000, "metric"), "2.0 L");
+	assert.equal(formatVolume(250, "metric"), "250 ml");
+	assert.equal(formatVolume(0, "metric"), "0 ml");
+	// US fluid ounces, which is what an imperial reader means by "oz".
+	assert.equal(formatVolume(473, "imperial"), "16 oz");
+	assert.equal(formatVolume(1700, "imperial"), "57 oz");
+});
+
+test("the quick-add sizes are vessels somebody actually pours", () => {
+	// The imperial row has to round to whole ounces, or the buttons read
+	// "8 oz, 12 oz, 16 oz" in one system and "8 oz, 11 oz, 17 oz" in the other.
+	for (const ml of QUICK_ADD_ML("imperial")) {
+		assert.match(formatVolume(ml, "imperial"), /^(8|12|16|24) oz$/);
+	}
+	assert.deepEqual(QUICK_ADD_ML("metric"), [150, 250, 330, 500, 750]);
 });

@@ -17,7 +17,7 @@ import { z } from "zod";
 const REPS_MAX = 1000;
 const WEIGHT_MAX_KG = 1000;
 const SETS_MAX = 30;
-const EXERCISES_MAX = 50;
+export const EXERCISES_MAX = 50;
 
 /**
  * What a set is, when it is not a working set.
@@ -35,6 +35,20 @@ const plannedSet = z.object({
 	 * were never planned and never done.
 	 */
 	reps: z.number().int().min(0).max(REPS_MAX).optional(),
+	/**
+	 * The top of a rep range, when the set is prescribed as one.
+	 *
+	 * Absent means `reps` is the whole target: five means five. Present, `reps`
+	 * is the bottom and this is the top, which is how almost every hypertrophy
+	 * block is actually written down. Double progression needs both numbers to
+	 * be readable at the rack, and a range folded into the note is a range the
+	 * app cannot count, compare or progress.
+	 *
+	 * Not validated against `reps`. A range entered backwards is a display
+	 * problem, and the two screens that render one sort the pair rather than
+	 * refusing to save a routine somebody is halfway through typing.
+	 */
+	repsMax: z.number().int().min(0).max(REPS_MAX).optional(),
 	/** Kilograms, always. 0 is a bodyweight set; absent is an unanswered one. */
 	weightKg: z.number().min(0).max(WEIGHT_MAX_KG).optional(),
 	/** Absent is a working set, which is almost all of them. */
@@ -52,7 +66,8 @@ const entry = {
 	note: z.string().max(500).optional(),
 	/**
 	 * Seconds to rest between this exercise's own sets. Absent means the routine
-	 * has no opinion and no timer starts.
+	 * has no opinion and the session falls back to `DEFAULT_REST_SEC`; `0` is an
+	 * explicit no rest, and the only way to get no timer.
 	 */
 	restSec: z.number().int().min(0).max(3600).optional(),
 	/**
@@ -85,7 +100,27 @@ export const routineExercise = z.object({
 
 export const routineExercises = z.array(routineExercise).max(EXERCISES_MAX);
 
-const loggedSet = plannedSet.extend({ done: z.boolean() });
+/**
+ * What a plausibility check made of this set, once anything has.
+ *
+ * Absent is the normal state and means one of two things that do not need
+ * telling apart: the set passed, or it was never the kind of set the check
+ * speaks to. `suspect` is a question nobody has answered yet, and it is what
+ * keeps the set out of records and out of the estimator without keeping it out
+ * of the log. `confirmed` is the lifter saying it happened, which is the end of
+ * the matter: `finish` will not re-flag it and nothing downstream skips it.
+ *
+ * Written by the server on finish and by the logging screen when somebody
+ * answers the prompt. Not part of a routine: a plan cannot be implausible, it
+ * has not happened yet.
+ */
+export const SET_FLAGS = ["suspect", "confirmed"] as const;
+export type SetFlag = (typeof SET_FLAGS)[number];
+
+const loggedSet = plannedSet.extend({
+	done: z.boolean(),
+	flag: z.enum(SET_FLAGS).optional(),
+});
 
 export const workoutExercise = z.object({
 	...entry,
@@ -119,7 +154,27 @@ export const startFromRoutine = (
 /** A warm-up is training, not tonnage. It is logged and it counts for nothing. */
 export const isCounted = (set: { type?: SetType }) => set.type !== "warmup";
 
-/** Total weight moved, done working sets only, rounded to the kilogram. */
+/**
+ * Whether a set is allowed to make a claim about somebody.
+ *
+ * A set under an unanswered question stays in the log and stays in the
+ * session's volume, because it is their diary and they wrote it. What it does
+ * not get to do is set a record, move the strength estimate, or decide what
+ * goes on the bar next week. Those are the three places one wrong number does
+ * lasting damage, and they are the three places this guards.
+ */
+export const isTrusted = (set: { flag?: SetFlag }) => set.flag !== "suspect";
+
+/**
+ * Total weight moved, done working sets only, rounded to the kilogram.
+ *
+ * Doubted sets are in it. A session total is a diary entry, and a diary that
+ * silently disagrees with the sets printed underneath it is worse than one
+ * carrying a number somebody typed wrong.
+ *
+ * ponytail: `workout.volume_kg` is therefore not a figure to rank people by.
+ * Recompute it over trusted sets only on the day there is a leaderboard.
+ */
 export const volumeKg = (exercises: WorkoutExercise[]) =>
 	Math.round(
 		exercises.reduce(
@@ -136,6 +191,153 @@ export const volumeKg = (exercises: WorkoutExercise[]) =>
 			0,
 		),
 	);
+
+/** Weight moved by one set. A warm-up moves none: it is training, not tonnage. */
+export const setVolumeKg = (set: PlannedSet) =>
+	isCounted(set) ? (set.reps ?? 0) * (set.weightKg ?? 0) : 0;
+
+/**
+ * Which set of one exercise beat the record, if any.
+ *
+ * "Record" is the heaviest total a single set has moved: weight times reps.
+ * Comparing on weight alone would call a heavy double a record over a set of
+ * ten that moved twice as much, and comparing on the session's total would make
+ * the record a function of how many sets somebody had time for.
+ *
+ * Only one index comes back per exercise, so a session where every set beats a
+ * long-neglected exercise's old best gets one medal rather than five. Ties go
+ * to the earliest set: that is the one that broke it.
+ *
+ * A set under an unanswered plausibility question is not in the running. A
+ * record is the one number in the app that is a claim rather than a note, and
+ * the whole reason to doubt a set is that it would otherwise become one.
+ */
+export function recordSetIndex(
+	sets: LoggedSet[],
+	previousBestKg: number,
+): number | undefined {
+	let bestIndex: number | undefined;
+	let bestKg = previousBestKg;
+
+	sets.forEach((set, index) => {
+		if (!set.done || !isTrusted(set)) return;
+		const volume = setVolumeKg(set);
+		if (volume > bestKg) {
+			bestKg = volume;
+			bestIndex = index;
+		}
+	});
+
+	return bestIndex;
+}
+
+/**
+ * What an exercise with no interval of its own rests for.
+ *
+ * Absent used to mean no timer, which read well and was wrong: almost nobody
+ * fills these fields in, so almost nobody ever saw a countdown, and "the app
+ * has no rest timer" is what that looks like from outside. Two minutes is the
+ * same number `estimatedSec` has always assumed for an unset exercise, so the
+ * clock on screen and the time-left estimate now agree.
+ *
+ * Turning it off is still possible; it is `0`, which is a choice somebody made
+ * rather than a field they never opened.
+ */
+export const DEFAULT_REST_SEC = 120;
+
+/**
+ * How long to rest after ticking one set off, in seconds, or nothing at all.
+ *
+ * Three cases, and the third is the one supersets exist for:
+ *
+ * 1. A set with more sets after it rests `restSec`.
+ * 2. The last set of an exercise rests `restAfterSec`, which is the walk to
+ *    whatever is next.
+ * 3. The last set of an exercise that is *not* the last in its superset rests
+ *    for nothing. Going straight into the next movement is what a superset is;
+ *    a timer there would be counting down the thing it is meant to prevent.
+ *
+ * Anything that comes out as zero comes back as undefined: no rest and no
+ * timer are the same thing to a caller, and one of them is not a countdown
+ * worth drawing.
+ */
+export function restAfterSet(
+	exercises: WorkoutExercise[],
+	key: string,
+	index: number,
+): number | undefined {
+	const at = exercises.findIndex((entry) => entry.key === key);
+	const entry = exercises[at];
+	if (!entry) return undefined;
+
+	const next = exercises[at + 1];
+	const last = index >= entry.sets.length - 1;
+
+	if (
+		last &&
+		entry.supersetId !== undefined &&
+		next?.supersetId === entry.supersetId
+	) {
+		return undefined;
+	}
+
+	const chosen = last ? (entry.restAfterSec ?? entry.restSec) : entry.restSec;
+
+	return (chosen ?? DEFAULT_REST_SEC) || undefined;
+}
+
+/**
+ * How long a session should take, in seconds.
+ *
+ * Rest is most of it. A set of ten is under a minute of work and the two
+ * minutes after it are not, which is why a session of twenty sets is an hour
+ * rather than fifteen minutes, and why an estimate that counts only the lifting
+ * is wrong by a factor of four.
+ *
+ * The work itself is priced per rep, floored: a triple still costs the walk to
+ * the rack and the setup. Warm-ups count — they take the same time as anything
+ * else, whatever they do for the volume total.
+ *
+ * `REST_ASSUMED` is what an exercise with no rest interval costs. Absent means
+ * the routine has no opinion, not that the lifter turns straight around.
+ *
+ * ponytail: supersets are counted as if they were separate exercises, so a
+ * session built out of them reads longer than it runs. Pair the entries by
+ * `supersetId` if anyone starts programming rounds seriously.
+ */
+const SEC_PER_REP = 3;
+const SET_SEC_MIN = 20;
+const REST_ASSUMED = 120;
+
+export function estimatedSec(
+	exercises: {
+		sets: { reps?: number }[];
+		restSec?: number;
+		restAfterSec?: number;
+	}[],
+): number {
+	return exercises.reduce((total, exercise, index) => {
+		const work = exercise.sets.reduce(
+			(sum, set) => sum + Math.max(SET_SEC_MIN, (set.reps ?? 0) * SEC_PER_REP),
+			0,
+		);
+		// One fewer rest than there are sets: nobody rests after the last one,
+		// they move on, and that move is `restAfterSec`.
+		const between =
+			Math.max(0, exercise.sets.length - 1) *
+			(exercise.restSec ?? REST_ASSUMED);
+		const after =
+			index === exercises.length - 1
+				? 0
+				: (exercise.restAfterSec ?? exercise.restSec ?? REST_ASSUMED);
+
+		return total + work + between + after;
+	}, 0);
+}
+
+/** Every set in the list, warm-ups included: what the session asks you to do. */
+export const setCount = (exercises: { sets: unknown[] }[]) =>
+	exercises.reduce((total, exercise) => total + exercise.sets.length, 0);
 
 export const doneSetCount = (exercises: WorkoutExercise[]) =>
 	exercises.reduce(
@@ -190,13 +392,19 @@ export function decodeCursor(cursor: string | null | undefined) {
 	return Number.isNaN(startedAt.getTime()) ? null : { startedAt, id };
 }
 
-/** The reverse of `startFromRoutine`, for saving a session as a routine. */
+/**
+ * The reverse of `startFromRoutine`, for saving a session as a routine.
+ *
+ * The flag comes off with the tick. Both are facts about a session that
+ * happened, and a plan for next Tuesday cannot be under a question about
+ * whether it took place.
+ */
 export const toRoutineExercises = (
 	exercises: WorkoutExercise[],
 ): RoutineExercise[] =>
 	exercises.map((exercise) => ({
 		...exercise,
-		sets: exercise.sets.map(({ done: _done, ...set }) => set),
+		sets: exercise.sets.map(({ done: _done, flag: _flag, ...set }) => set),
 	}));
 
 type HasSuperset = { supersetId?: string };
@@ -366,4 +574,44 @@ export function normaliseSupersets<T extends HasSuperset>(exercises: T[]): T[] {
 		const id = newKey();
 		return run.entries.map((entry) => ({ ...entry, supersetId: id }));
 	});
+}
+
+/**
+ * Notes written onto a session's exercises from outside the logging screen.
+ *
+ * Keyed on `exerciseId` rather than on `key`, because the writer is Milo and
+ * `key` is an id minted in a browser that Milo never saw. The cost is that the
+ * same movement twice in one session takes the same note twice, which is the
+ * right answer far more often than annotating one of two identical rows at
+ * random would be.
+ *
+ * An empty string clears a note. That is the only way to take one back off
+ * without opening the session, and "" is what a model sends when asked to
+ * remove something.
+ *
+ * `missing` is what the caller could not place: ids the session does not
+ * contain. Reported rather than ignored, so a note written against the wrong
+ * exercise comes back as something to correct instead of vanishing.
+ */
+export function applyNotes<T extends { exerciseId: string; note?: string }>(
+	exercises: T[],
+	notes: { exerciseId: string; note: string }[],
+): { exercises: T[]; missing: string[] } {
+	const byId = new Map(notes.map((note) => [note.exerciseId, note.note]));
+	const placed = new Set<string>();
+
+	const next = exercises.map((entry) => {
+		const note = byId.get(entry.exerciseId);
+		if (note === undefined) return entry;
+		placed.add(entry.exerciseId);
+		// Deleted rather than set to "", so a cleared note is absent in the
+		// document exactly as it is for an exercise nobody ever annotated.
+		const { note: _cleared, ...rest } = entry;
+		return (note ? { ...rest, note } : rest) as T;
+	});
+
+	return {
+		exercises: next,
+		missing: [...byId.keys()].filter((id) => !placed.has(id)),
+	};
 }

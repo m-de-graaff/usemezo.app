@@ -9,7 +9,7 @@ type Props = { params: Promise<{ section: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
 	const section = findSection((await params).section);
 	return {
-		title: section ? `${section.title} settings | Mezo` : "Settings | Mezo",
+		title: section ? `${section.title} settings` : "Settings",
 	};
 }
 

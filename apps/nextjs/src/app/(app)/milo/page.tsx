@@ -2,7 +2,7 @@ import { getSession } from "@mezo/auth/server";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Milo | Mezo" };
+export const metadata: Metadata = { title: "Milo" };
 
 /**
  * A new conversation.

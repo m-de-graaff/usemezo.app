@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ACTIVITY_MULTIPLIERS, ageFrom, buildPlan } from "./plan.ts";
+import {
+	ACTIVITY_MULTIPLIERS,
+	ageFrom,
+	bodyComposition,
+	buildPlan,
+} from "./plan.ts";
 import { ACTIVITY_LEVELS } from "./profile-fields.ts";
 
 /** Pinned, so a test does not start failing on someone's birthday. */
@@ -175,4 +180,60 @@ test("an unknown activity level is a missing answer, not a default", () => {
 	const plan = buildPlan({ ...BASE, activityLevel: "occasionally" }, AT);
 	assert.equal(plan.ok, false);
 	assert.deepEqual(plan.missing, ["how active you are"]);
+});
+
+/**
+ * The reading this was written against: a real InBody-style scan, where the
+ * device prints both the measurements and the figures derived from them. The
+ * test is that Mezo's arithmetic reproduces the device's own printout from the
+ * four values it stores.
+ */
+const SCAN = {
+	weightKg: 91,
+	bodyFatMassKg: 15.3,
+	bodyFatPercent: 16.8,
+	boneMassKg: 4.3,
+	totalBodyWaterKg: 55.4,
+	extracellularWaterKg: 20.6,
+};
+
+test("the figures a scan derives are reproduced, not stored", () => {
+	const derived = bodyComposition(SCAN);
+
+	// The device printed 75.7, 71.4 and 34.8. Anything else here means Mezo
+	// would be showing a number that contradicts the paper in the user's hand.
+	assert.equal(derived.fatFreeMassKg, 75.7);
+	assert.equal(derived.softLeanMassKg, 71.4);
+	assert.equal(derived.intracellularWaterKg, 34.8);
+	assert.equal(derived.extracellularRatio, 0.37);
+});
+
+test("fat mass comes from the percentage when there is no mass", () => {
+	const { bodyFatMassKg: _dropped, ...withoutMass } = SCAN;
+	// 16.8% of 91 is 15.288, so this lands on the same fat free mass.
+	assert.equal(bodyComposition(withoutMass).fatFreeMassKg, 75.7);
+});
+
+test("a missing input is a missing answer, not a zero", () => {
+	assert.deepEqual(bodyComposition({}), {
+		fatFreeMassKg: null,
+		softLeanMassKg: null,
+		intracellularWaterKg: null,
+		extracellularRatio: null,
+	});
+
+	// Weight alone says nothing about how much of it is fat.
+	assert.equal(bodyComposition({ weightKg: 91 }).fatFreeMassKg, null);
+	// And without a bone reading there is no soft lean mass, even though fat
+	// free mass is known.
+	const noBone = bodyComposition({ ...SCAN, boneMassKg: null });
+	assert.equal(noBone.fatFreeMassKg, 75.7);
+	assert.equal(noBone.softLeanMassKg, null);
+});
+
+test("water outside the cells cannot exceed the total", () => {
+	// A mistyped or mismatched pair would otherwise report negative water.
+	const wrong = bodyComposition({ ...SCAN, extracellularWaterKg: 60 });
+	assert.equal(wrong.intracellularWaterKg, null);
+	assert.equal(wrong.extracellularRatio, null);
 });

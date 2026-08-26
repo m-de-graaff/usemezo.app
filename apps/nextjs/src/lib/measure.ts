@@ -97,3 +97,55 @@ const round = (value: number, measure: Measure | undefined) =>
  */
 export const defaultFor = (measure: Measure | undefined) =>
 	measure === "length" ? 175 : measure === "mass" ? 75 : 0;
+
+/** `4080` -> `1h 08m`. Minutes alone read badly past an hour. */
+export function formatDuration(seconds: number): string {
+	const total = Math.max(0, Math.round(seconds / 60));
+	const hours = Math.floor(total / 60);
+	const minutes = total % 60;
+	return hours
+		? `${hours}h ${String(minutes).padStart(2, "0")}m`
+		: `${minutes}m`;
+}
+
+/**
+ * `150` -> `2m 30s`. A rest interval, as a person counts it.
+ *
+ * Nobody rests for "150 seconds". They rest for two and a half minutes, and a
+ * number the reader has to divide by sixty is a number they stop reading. The
+ * seconds are dropped when there are none, so a round two minutes is `2m` and
+ * not `2m 0s`.
+ */
+export function formatRest(seconds: number): string {
+	const whole = Math.max(0, Math.round(seconds));
+	const minutes = Math.floor(whole / 60);
+	const rest = whole % 60;
+	if (!minutes) return `${rest}s`;
+	return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+}
+
+/** US fluid ounces, which is what an imperial reader means by "oz" of a drink. */
+const ML_PER_FL_OZ = 29.573_529_5;
+
+/**
+ * `1700` -> `1.7 L` or `57 oz`. Volumes are stored in millilitres, the same
+ * rule as heights and weights: the unit preference decides the readout only.
+ *
+ * Metric switches to litres past a litre because nobody says "one thousand
+ * seven hundred millilitres", and stays in millilitres below it because
+ * `0.25 L` is a glass of water written in a way nobody writes it.
+ */
+export function formatVolume(ml: number, system: UnitSystem): string {
+	if (system === "imperial") return `${Math.round(ml / ML_PER_FL_OZ)} oz`;
+	return ml >= 1000
+		? `${(Math.round(ml / 100) / 10).toFixed(1)} L`
+		: `${Math.round(ml)} ml`;
+}
+
+/**
+ * The quick-add sizes, per system. Real vessels rather than round numbers: the
+ * imperial row is the 8, 12, 16 and 24oz cups a US kitchen actually holds, and
+ * a metric reader gets a cup, a glass, a can, a bottle and a large bottle.
+ */
+export const QUICK_ADD_ML = (system: UnitSystem): number[] =>
+	system === "imperial" ? [237, 355, 473, 710] : [150, 250, 330, 500, 750];

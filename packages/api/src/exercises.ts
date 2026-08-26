@@ -11,6 +11,10 @@ import { ROWS } from "./exercises-data.ts";
  * same list between them: the picker in the browser, Milo's search tool on the
  * server, and anything that has to turn a stored id back into a name.
  *
+ * On top of it sit two per-user layers, both stored in the database and both
+ * described under "One user's own catalogue" below: the exercises somebody has
+ * added that the dataset never had, and the ones they never want offered again.
+ *
  * ponytail: the whole list reaches the client bundle, around 180 kB before
  * compression. That is the price of a picker that filters as you type without a
  * round trip per keystroke. If the bundle starts to matter, move
@@ -27,8 +31,12 @@ export type Exercise = {
 	/** The primary muscle. */
 	target: string;
 	secondary: string[];
-	/** Filename stem, shared by the still and the animation. */
-	media: string;
+	/**
+	 * Filename stem, shared by the still and the animation. Absent on an
+	 * exercise somebody added themselves: there is no picture of it, because
+	 * nobody drew one.
+	 */
+	media?: string;
 };
 
 /**
@@ -50,17 +58,154 @@ export const MEDIA_ATTRIBUTION = {
 
 /** The still. Cheap, and what a list of forty rows should be showing. */
 export const exerciseImage = (exercise: Exercise) =>
-	`${MEDIA}/images/${exercise.media}.jpg`;
+	exercise.media ? `${MEDIA}/images/${exercise.media}.jpg` : null;
 
 /** The animation. Around 90 kB each, so only ever on a screen that asked. */
 export const exerciseGif = (exercise: Exercise) =>
-	`${MEDIA}/videos/${exercise.media}.gif`;
+	exercise.media ? `${MEDIA}/videos/${exercise.media}.gif` : null;
 
 export const EXERCISES: readonly Exercise[] = ROWS;
 
 const BY_ID = new Map(ROWS.map((exercise) => [exercise.id, exercise]));
 
-export const exerciseById = (id: string) => BY_ID.get(id);
+/* -------------------------------------------------------------------------- */
+/* One user's own catalogue                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a user has done to the catalogue: exercises they added, and exercises
+ * they never want to see again.
+ *
+ * Both are per-user rows in the database, so neither can live in the module the
+ * way the dataset does. `hidden` holds ids from either layer and only ever
+ * filters `searchExercises` — an exercise somebody blacklisted after training it
+ * for a year still has to render in that year of history, so nothing about
+ * looking one up by id consults it.
+ */
+export type UserCatalogue = {
+	custom: readonly Exercise[];
+	hidden: ReadonlySet<string>;
+};
+
+export const EMPTY_CATALOGUE: UserCatalogue = {
+	custom: [],
+	hidden: new Set(),
+};
+
+/**
+ * The custom exercises of whoever is looking, indexed for `exerciseById`.
+ *
+ * **Browser only.** There is one user per browser tab, so registering their
+ * list once and letting every `exerciseById` in the tree find it saves
+ * threading a lookup through eight components that only want a name. There is
+ * *not* one user per server process: server code passes its own user's map as
+ * the second argument instead, and nothing on the server ever calls this. A
+ * request that set it would be handing the next request somebody else's
+ * exercises.
+ */
+let registered = new Map<string, Exercise>();
+
+export function registerCustomExercises(custom: readonly Exercise[]): void {
+	registered = new Map(custom.map((exercise) => [exercise.id, exercise]));
+}
+
+/** A user's custom exercises, ready for `exerciseById` and friends. */
+export const customById = (custom: readonly Exercise[]) =>
+	new Map(custom.map((exercise) => [exercise.id, exercise]));
+
+/**
+ * The dataset first, then whatever this user added.
+ *
+ * `custom` is what server code passes, because a server process holds no single
+ * user. Omitting it falls back to the browser's registered list, which is what
+ * every component does.
+ */
+export const exerciseById = (
+	id: string,
+	custom?: ReadonlyMap<string, Exercise>,
+) => BY_ID.get(id) ?? (custom ?? registered).get(id);
+
+/**
+ * Ids the dataset does not use, so a custom exercise can never shadow or be
+ * mistaken for a catalogue one. The dataset's own ids are four digits.
+ */
+export const CUSTOM_PREFIX = "custom_";
+export const isCustomExercise = (id: string) => id.startsWith(CUSTOM_PREFIX);
+
+/* -------------------------------------------------------------------------- */
+/* How a movement is logged                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What "weight" means for one kind of equipment.
+ *
+ * Every number in this app is one number per set, and the same 20 does not mean
+ * the same thing twice: 20 on a dumbbell press is forty kilograms in the air,
+ * 20 on an assisted pull-up is twenty kilograms taken *off* you, and 20 on a
+ * barbell is two tens on the sleeves. Somebody who logs those three the way
+ * they read them has a training history that says they got weaker.
+ *
+ * Bars are logged as **plates only**. The alternative is a lifter doing mental
+ * arithmetic between sets against a bar whose real weight they are guessing at
+ * anyway — an EZ bar is 7 to 10 kg and a trap bar is whatever that gym bought.
+ * A number you read off the sleeves is one you can log without thinking, and it
+ * still compares against itself, which is what progression needs. It does mean
+ * a barbell figure here is around 20 kg under a strength-standards figure
+ * elsewhere; see `estimateLoad`.
+ *
+ * So the convention is stated on screen rather than assumed. Keyed on
+ * `equipment`, which is the only thing the dataset gives us that predicts it,
+ * and deliberately short: this is a sentence read once beside a movement, not
+ * documentation.
+ *
+ * Anything absent has no convention worth explaining. A barbell squat is the
+ * weight on the barbell, and a tooltip saying so is noise on 800 exercises.
+ */
+const LOGGING: Record<string, string> = {
+	dumbbell:
+		"Log one dumbbell, not the pair. A set with two 20 kg dumbbells is 20 kg.",
+	kettlebell:
+		"Log one kettlebell, not the pair. A set with two 16 kg bells is 16 kg.",
+	barbell: "Log the plates you loaded, not the bar.",
+	"olympic barbell": "Log the plates you loaded, not the bar.",
+	"ez barbell": "Log the plates you loaded, not the bar.",
+	"trap bar": "Log the plates you loaded, not the bar.",
+	"smith machine": "Log the plates you loaded, not the bar.",
+	"leverage machine": "Log the weight you selected on the stack.",
+	hammer: "Log the weight you selected on the stack.",
+	cable: "Log the weight you selected on the stack.",
+	"sled machine": "Log the plates you loaded. The sled itself is not counted.",
+	assisted:
+		"Log the assistance, which is weight taken off you. Higher is easier here, so progress by making this number smaller.",
+	"body weight":
+		"No weight to log. Leave it at 0 and let the reps carry the progress.",
+	weighted:
+		"Log only what you added: the belt, vest, dumbbell or plate. Your own bodyweight is not part of it.",
+	band: "No weight to log. Put the band's colour or strength in the note, because a band is not kilograms.",
+	"resistance band":
+		"No weight to log. Put the band's colour or strength in the note, because a band is not kilograms.",
+	"medicine ball": "Log the ball's own weight.",
+	"stationary bike":
+		"Not a weight. Log the sets you did and put the time or distance in the note.",
+	"elliptical machine":
+		"Not a weight. Log the sets you did and put the time or distance in the note.",
+	"skierg machine":
+		"Not a weight. Log the sets you did and put the time or distance in the note.",
+	"stepmill machine":
+		"Not a weight. Log the sets you did and put the time or distance in the note.",
+	"upper body ergometer":
+		"Not a weight. Log the sets you did and put the time or distance in the note.",
+};
+
+/**
+ * How this exercise's weight column should be filled in, or null.
+ *
+ * Null for most of the catalogue, which is the point: an icon beside every
+ * movement is an icon nobody reads. An exercise somebody added themselves gets
+ * whatever its equipment implies, the same as any other.
+ */
+export const loggingHint = (exercise: Exercise): string | null =>
+	LOGGING[exercise.equipment] ?? null;
 
 export const BODY_PARTS: readonly string[] = [
 	...new Set(ROWS.map((exercise) => exercise.bodyPart)),
@@ -74,7 +219,7 @@ export const EQUIPMENT: readonly string[] = [
 const MAX_RESULTS = 200;
 
 /** Runs of whitespace collapse, so "bench   press" still finds "bench press". */
-const normalise = (value: string) =>
+export const normaliseName = (value: string) =>
 	value.trim().toLowerCase().replace(/\s+/g, " ");
 
 /**
@@ -84,21 +229,35 @@ const normalise = (value: string) =>
  * Deliberately not fuzzy. A typo that returns something plausible but wrong is
  * worse here than one that returns nothing, because whatever comes back gets
  * logged as the set somebody did.
+ *
+ * The user's own exercises come first: somebody who went to the trouble of
+ * adding one is looking for it, not for the dataset's nearest guess. Their
+ * blacklist is applied last, so hiding something removes it from every search
+ * rather than from the one screen that remembered to filter.
  */
 export function searchExercises(filter: {
 	query?: string;
 	bodyPart?: string;
 	equipment?: string;
 	limit?: number;
+	/** This user's own exercises. Omitted in the browser; see `registered`. */
+	custom?: readonly Exercise[];
+	/** Ids to leave out. Omitted in the browser; see `registered`. */
+	hidden?: ReadonlySet<string>;
+	/** Return *only* the blacklisted ones, for a screen offering to undo it. */
+	onlyHidden?: boolean;
 }): Exercise[] {
-	const query = filter.query ? normalise(filter.query) : "";
+	const query = filter.query ? normaliseName(filter.query) : "";
 	const limit = Math.min(filter.limit ?? MAX_RESULTS, MAX_RESULTS);
+	const custom = filter.custom ?? [...registered.values()];
+	const hidden = filter.hidden ?? new Set<string>();
 
 	const hits: Exercise[] = [];
-	for (const exercise of ROWS) {
+	for (const exercise of [...custom, ...ROWS]) {
+		if (hidden.has(exercise.id) !== Boolean(filter.onlyHidden)) continue;
 		if (filter.bodyPart && exercise.bodyPart !== filter.bodyPart) continue;
 		if (filter.equipment && exercise.equipment !== filter.equipment) continue;
-		if (query && !normalise(exercise.name).includes(query)) continue;
+		if (query && !normaliseName(exercise.name).includes(query)) continue;
 		hits.push(exercise);
 		if (hits.length === limit) break;
 	}
